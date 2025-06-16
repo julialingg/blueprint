@@ -1,0 +1,3187 @@
+PR,issue,base_commit,merge_commit,created_at,patch,test_patch,problem_statement,issue_statement
+https://github.com/palantir/blueprint/pull/7068,https://github.com/palantir/blueprint/issues/7055,4f0d37dd40e856e16686da157fd35450504fbe72,e1c83824d0aa617296df99647852cd3717466482,2024-11-14T16:44:44Z,"diff --git a/packages/select/src/components/multi-select/multiSelect.tsx b/packages/select/src/components/multi-select/multiSelect.tsx
+index 1d69815585..e247ce7cec 100644
+--- a/packages/select/src/components/multi-select/multiSelect.tsx
++++ b/packages/select/src/components/multi-select/multiSelect.tsx
+@@ -419,8 +419,8 @@ export class MultiSelect<T> extends AbstractPureComponent<MultiSelectProps<T>, M
+             if (e.key === ""Escape"" || e.key === ""Tab"") {
+                 // By default the escape key will not trigger a blur on the
+                 // input element. It must be done explicitly.
+-                if (this.input != null) {
+-                    this.input.blur();
++                if (e.key === ""Escape"") {
++                    this.input?.blur();
+                 }
+                 this.setState({ isOpen: false });
+             } else if (!(e.key === ""Backspace"" || e.key === ""ArrowLeft"" || e.key === ""ArrowRight"")) {
+
+
+diff --git a/packages/select/src/components/suggest/suggest.tsx b/packages/select/src/components/suggest/suggest.tsx
+index 9cc3b87173..30d8cdf025 100644
+--- a/packages/select/src/components/suggest/suggest.tsx
++++ b/packages/select/src/components/suggest/suggest.tsx
+@@ -365,7 +365,11 @@ export class Suggest<T> extends AbstractPureComponent<SuggestProps<T>, SuggestSt
+     ) => {
+         return (e: React.KeyboardEvent<HTMLInputElement>) => {
+             if (e.key === ""Escape"" || e.key === ""Tab"") {
+-                this.inputElement?.blur();
++                // By default the escape key will not trigger a blur on the
++                // input element. It must be done explicitly.
++                if (e.key === ""Escape"") {
++                    this.inputElement?.blur();
++                }
+                 this.setState({ isOpen: false });
+             } else if (
+                 this.props.openOnKeyDown &&
+",,"#### Fixes #7055
+
+#### Checklist
+
+- [ ] Includes tests
+- [ ] Update documentation
+
+#### Changes proposed in this pull request:
+
+Fixes an issue where MultiSelect/Suggest component input fields would inadvertently capture tab focus in Firefox, preventing focus from moving to the rest of the document.
+
+#### Reviewers should focus on:
+
+Ensure that tab focus works as expected on MultiSelect/Suggest components in both Chrome and Firefox.
+
+#### Screenshot
+
+| Before | After |
+| ------ | ----- |
+| ![before](https://github.com/user-attachments/assets/4dd2befd-0b13-4623-8c89-bf3c4ef6dd36) | ![after](https://github.com/user-attachments/assets/74a731c6-9c73-40b4-9773-195f3de26fb0) |
+
+
+
+
+
+","#### Environment
+
+- __Package version(s)__:
+@blueprintjs/core: 5.13.0
+@blueprintjs/select: 5.2.4
+- __Operating System__:
+Windows 10 Home Edition
+- __Browser name and version__:
+Firefox 132.0.1
+
+#### Code Sandbox
+
+Can be reproduced on the bluerpint docs page:
+https://blueprintjs.com/docs/#select/multi-select
+
+#### Steps to reproduce
+
+1. Go to the link mentioned above
+2. Start pressing Tab key until focus is on MultiSelect input 
+
+#### Actual behavior
+
+As soon as focus is on MultiSelect input there is no way to make it leave it by using the Tab key.
+
+The issue is reproducible in Firefox only, behavior is correct in Google Chrome and Microsoft Egde.
+
+#### Expected behavior
+
+It should be possible to switch to the next element by using the Tab key.
+
+#### Possible solution
+
+None.
+"
+https://github.com/palantir/blueprint/pull/7333,https://github.com/palantir/blueprint/issues/6916,93be76d6d7a84228a3b0bee4b298b03b56a4043f,632fbab18a80a37a84d2a26f1ced764acc3bceeb,2025-03-10T13:42:29Z,"diff --git a/packages/core/src/common/props.ts b/packages/core/src/common/props.ts
+index 8e95cb8f2cc..4f529af478a 100644
+--- a/packages/core/src/common/props.ts
++++ b/packages/core/src/common/props.ts
+@@ -34,6 +34,12 @@ export type HTMLDivProps = React.HTMLAttributes<HTMLDivElement>;
+  */
+ export type HTMLInputProps = React.InputHTMLAttributes<HTMLInputElement>;
+ 
++/**
++ * Alias for all valid HTML props for `<textarea>` element.
++ * Does not include React's `ref` or `key`.
++ */
++export type HTMLTextAreaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
++
+ /**
+  * Alias for a `React.JSX.Element` or a value that renders nothing.
+  *
+
+
+diff --git a/packages/core/src/components/editable-text/editableText.tsx b/packages/core/src/components/editable-text/editableText.tsx
+index 85f1f9a272a..5736768fce7 100644
+--- a/packages/core/src/components/editable-text/editableText.tsx
++++ b/packages/core/src/components/editable-text/editableText.tsx
+@@ -18,10 +18,22 @@ import classNames from ""classnames"";
+ import * as React from ""react"";
+ 
+ import { AbstractPureComponent, Classes } from ""../../common"";
+-import { DISPLAYNAME_PREFIX, type IntentProps, type Props } from ""../../common/props"";
++import {
++    DISPLAYNAME_PREFIX,
++    type HTMLInputProps,
++    type HTMLTextAreaProps,
++    type IntentProps,
++    type Props,
++} from ""../../common/props"";
+ import { clamp } from ""../../common/utils"";
+ 
+ export interface EditableTextProps extends IntentProps, Props {
++    /**
++     * Custom attributes that will be passed to the underlying input (or textarea) element.
++     * This allows you to specify additional attributes like
++     * `aria-` attributes, `data-` attributes, etc.
++     */
++    customInputAttributes?: HTMLInputProps & HTMLTextAreaProps;
+     /**
+      * EXPERIMENTAL FEATURE.
+      *
+@@ -383,7 +395,7 @@ export class EditableText extends AbstractPureComponent<EditableTextProps, Edita
+     };
+ 
+     private renderInput(value: string | undefined) {
+-        const { disabled, maxLength, multiline, type, placeholder } = this.props;
++        const { disabled, maxLength, multiline, type, placeholder, customInputAttributes } = this.props;
+         const props: React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> = {
+             className: Classes.EDITABLE_TEXT_INPUT,
+             disabled,
+@@ -405,9 +417,9 @@ export class EditableText extends AbstractPureComponent<EditableTextProps, Edita
+         }
+ 
+         return multiline ? (
+-            <textarea ref={this.refHandlers.input} {...props} />
++            <textarea ref={this.refHandlers.input} {...props} {...customInputAttributes} />
+         ) : (
+-            <input ref={this.refHandlers.input} type={type} {...props} />
++            <input ref={this.refHandlers.input} type={type} {...props} {...customInputAttributes} />
+         );
+     }
+ 
+","diff --git a/packages/core/test/editable-text/editableTextTests.tsx b/packages/core/test/editable-text/editableTextTests.tsx
+index 6e10eb4cf00..0bf36ced7f6 100644
+--- a/packages/core/test/editable-text/editableTextTests.tsx
++++ b/packages/core/test/editable-text/editableTextTests.tsx
+@@ -310,4 +310,30 @@ describe(""<EditableText>"", () => {
+             wrapper.find(""textarea"").simulate(""change"", { target: { value } }).simulate(""keydown"", e);
+         }
+     });
++
++    describe(""custom attributes"", () => {
++        const customProps = {
++            ""aria-label"": ""Edit description"",
++            ""data-gramm"": ""false"",
++            spellcheck: ""false"",
++        };
++
++        it(""passes custom attributes to textarea when multiline is true"", () => {
++            const wrapper = mount(
++                <EditableText isEditing={true} multiline={true} customInputAttributes={customProps} />,
++            ).find(""textarea"");
++            assert.strictEqual(wrapper.prop(""data-gramm""), ""false"");
++            assert.strictEqual(wrapper.prop(""spellcheck""), ""false"");
++            assert.strictEqual(wrapper.prop(""aria-label""), ""Edit description"");
++        });
++
++        it(""passes custom attributes to input when multiline is false"", () => {
++            const wrapper = mount(
++                <EditableText isEditing={true} multiline={false} customInputAttributes={customProps} />,
++            ).find(""input"");
++            assert.strictEqual(wrapper.prop(""data-gramm""), ""false"");
++            assert.strictEqual(wrapper.prop(""spellcheck""), ""false"");
++            assert.strictEqual(wrapper.prop(""aria-label""), ""Edit description"");
++        });
++    });
+ });
+","#### Fixes #6916
+
+#### Checklist
+
+-   [x] Includes tests
+-   [x] Update documentation
+
+<!-- DO NOT enable CircleCI for your fork. Our build will run when you open this PR. -->
+
+#### Changes proposed in this pull request:
+
+<!-- Fill this out. -->
+
+#### Reviewers should focus on:
+I added the ability to pass custom attributes to the underlying text area element. It was not clear to me if this should also be added for the underlying input and if so should that have a seperate prop? Or would we just use the same prop for the two.
+
+Furthermore, this is the first time i try contributing to an open source project, would love feedback if any!
+
+<!-- Fill this out. -->
+
+#### Screenshot
+
+<!-- Include an image of the most relevant user-facing change, if any. -->
+","#### Environment
+
+@blueprintjs/core: 5.10.5
+
+#### Feature request
+
+We need to enhance the EditableText component from BlueprintJS to allow the addition of custom HTML attributes to its underlying textarea element. This feature is crucial for improving the component's flexibility and compatibility with various browser extensions and accessibility requirements. `data-`, `spellcheck`, `aria-`, and other standard HTML attributes.
+
+#### Examples
+
+```
+<EditableText
+  value={text}
+  onChange={handleChange}
+  textareaAttributes={{
+    'data-gramm': 'false',  // Disable Grammarly
+    'spellcheck': 'false',  // Disable browser spellcheck
+    'aria-label': 'Edit description',  // Improve accessibility
+  }}
+/>
+```
+"
+https://github.com/palantir/blueprint/pull/7060,https://github.com/palantir/blueprint/issues/4782,08c037643e40be4929c28a2ee1f3edea7dc3f97c,b7b44d0b4af8b5e0be26b49b93df9161b38b904e,2024-11-12T19:19:09Z,"diff --git a/packages/core/changelog/@unreleased/pr-7060.v2.yml b/packages/core/changelog/@unreleased/pr-7060.v2.yml
+new file mode 100644
+index 0000000000..d12e967caa
+--- /dev/null
++++ b/packages/core/changelog/@unreleased/pr-7060.v2.yml
+@@ -0,0 +1,5 @@
++type: fix
++fix:
++  description: 'fix(Tag): Add keyboard accessibility'
++  links:
++  - https://github.com/palantir/blueprint/pull/7060
+
+
+diff --git a/packages/core/src/accessibility/useInteractiveAttributes.ts b/packages/core/src/accessibility/useInteractiveAttributes.ts
+new file mode 100644
+index 0000000000..d2022e51b2
+--- /dev/null
++++ b/packages/core/src/accessibility/useInteractiveAttributes.ts
+@@ -0,0 +1,88 @@
++/* !
++ * (c) Copyright 2024 Palantir Technologies Inc. All rights reserved.
++ */
++
++import * as React from ""react"";
++
++import { mergeRefs, Utils } from ""../common"";
++
++type InteractiveHTMLAttributes<E extends HTMLElement> = Pick<
++    React.HTMLAttributes<E>,
++    ""onBlur"" | ""onClick"" | ""onFocus"" | ""onKeyDown"" | ""onKeyUp"" | ""tabIndex""
++>;
++
++interface InteractiveComponentProps extends InteractiveHTMLAttributes<HTMLElement> {
++    active?: boolean | undefined;
++}
++
++interface InteractiveAttributes<E extends HTMLElement> extends InteractiveHTMLAttributes<E> {
++    ref: React.Ref<E>;
++}
++
++export function useInteractiveAttributes<E extends HTMLElement>(
++    interactive: boolean,
++    props: InteractiveComponentProps,
++    ref: React.Ref<E>,
++    defaultTabIndex?: number,
++): [active: boolean, interactiveProps: InteractiveAttributes<E>] {
++    const { active, onClick, onFocus, onKeyDown, onKeyUp, onBlur, tabIndex = defaultTabIndex } = props;
++    // the current key being pressed
++    const [currentKeyPressed, setCurrentKeyPressed] = React.useState<string | undefined>();
++    // whether the button is in ""active"" state
++    const [isActive, setIsActive] = React.useState(false);
++    // our local ref for the interactive element, merged with the consumer's own ref in this hook's return value
++    const elementRef = React.useRef<E | null>(null);
++
++    const handleBlur = React.useCallback(
++        (e: React.FocusEvent<E>) => {
++            if (isActive) {
++                setIsActive(false);
++            }
++
++            onBlur?.(e);
++        },
++        [isActive, onBlur],
++    );
++
++    const handleKeyDown = React.useCallback(
++        (e: React.KeyboardEvent<E>) => {
++            if (Utils.isKeyboardClick(e)) {
++                e.preventDefault();
++                if (e.key !== currentKeyPressed) {
++                    setIsActive(true);
++                }
++            }
++
++            setCurrentKeyPressed(e.key);
++            onKeyDown?.(e);
++        },
++        [currentKeyPressed, onKeyDown],
++    );
++
++    const handleKeyUp = React.useCallback(
++        (e: React.KeyboardEvent<E>) => {
++            if (Utils.isKeyboardClick(e)) {
++                setIsActive(false);
++                elementRef.current?.click();
++            }
++            setCurrentKeyPressed(undefined);
++            onKeyUp?.(e);
++        },
++        [onKeyUp, elementRef],
++    );
++
++    const resolvedActive = interactive && (active || isActive);
++
++    return [
++        resolvedActive,
++        {
++            onBlur: handleBlur,
++            onClick: interactive ? onClick : undefined,
++            onFocus: interactive ? onFocus : undefined,
++            onKeyDown: handleKeyDown,
++            onKeyUp: handleKeyUp,
++            ref: mergeRefs(elementRef, ref),
++            tabIndex: interactive ? tabIndex : -1,
++        },
++    ];
++}
+
+
+diff --git a/packages/core/src/components/button/buttons.tsx b/packages/core/src/components/button/buttons.tsx
+index 4ddeae7c5f..226b97d57c 100644
+--- a/packages/core/src/components/button/buttons.tsx
++++ b/packages/core/src/components/button/buttons.tsx
+@@ -17,9 +17,9 @@
+ import classNames from ""classnames"";
+ import * as React from ""react"";
+ 
++import { useInteractiveAttributes } from ""../../accessibility/useInteractiveAttributes"";
+ import { Classes, Utils } from ""../../common"";
+ import { DISPLAYNAME_PREFIX, removeNonHTMLProps } from ""../../common/props"";
+-import { mergeRefs } from ""../../common/refs"";
+ import { Icon } from ""../icon/icon"";
+ import { Spinner, SpinnerSize } from ""../spinner/spinner"";
+ import { Text } from ""../text/text"";
+@@ -49,7 +49,7 @@ Button.displayName = `${DISPLAYNAME_PREFIX}.Button`;
+  */
+ export const AnchorButton: React.FC<AnchorButtonProps> = React.forwardRef<HTMLAnchorElement, AnchorButtonProps>(
+     (props, ref) => {
+-        const { href, tabIndex = 0 } = props;
++        const { href } = props;
+         const commonProps = useSharedButtonAttributes(props, ref);
+ 
+         return (
+@@ -59,7 +59,6 @@ export const AnchorButton: React.FC<AnchorButtonProps> = React.forwardRef<HTMLAn
+                 {...commonProps}
+                 aria-disabled={commonProps.disabled}
+                 href={commonProps.disabled ? undefined : href}
+-                tabIndex={commonProps.disabled ? -1 : tabIndex}
+             >
+                 {renderButtonContents(props)}
+             </a>
+@@ -75,67 +74,15 @@ function useSharedButtonAttributes<E extends HTMLAnchorElement | HTMLButtonEleme
+     props: E extends HTMLAnchorElement ? AnchorButtonProps : ButtonProps,
+     ref: React.Ref<E>,
+ ) {
+-    const {
+-        active = false,
+-        alignText,
+-        fill,
+-        large,
+-        loading = false,
+-        minimal,
+-        onBlur,
+-        onKeyDown,
+-        onKeyUp,
+-        outlined,
+-        small,
+-        tabIndex,
+-    } = props;
++    const { alignText, fill, large, loading = false, minimal, outlined, small } = props;
+     const disabled = props.disabled || loading;
+ 
+-    // the current key being pressed
+-    const [currentKeyPressed, setCurrentKeyPressed] = React.useState<string | undefined>();
+-    // whether the button is in ""active"" state
+-    const [isActive, setIsActive] = React.useState(false);
+-    // our local ref for the button element, merged with the consumer's own ref (if supplied) in this hook's return value
+-    const buttonRef = React.useRef<E | null>(null);
+-
+-    const handleBlur = React.useCallback(
+-        (e: React.FocusEvent<any>) => {
+-            if (isActive) {
+-                setIsActive(false);
+-            }
+-            onBlur?.(e);
+-        },
+-        [isActive, onBlur],
+-    );
+-    const handleKeyDown = React.useCallback(
+-        (e: React.KeyboardEvent<any>) => {
+-            if (Utils.isKeyboardClick(e)) {
+-                e.preventDefault();
+-                if (e.key !== currentKeyPressed) {
+-                    setIsActive(true);
+-                }
+-            }
+-            setCurrentKeyPressed(e.key);
+-            onKeyDown?.(e);
+-        },
+-        [currentKeyPressed, onKeyDown],
+-    );
+-    const handleKeyUp = React.useCallback(
+-        (e: React.KeyboardEvent<any>) => {
+-            if (Utils.isKeyboardClick(e)) {
+-                setIsActive(false);
+-                buttonRef.current?.click();
+-            }
+-            setCurrentKeyPressed(undefined);
+-            onKeyUp?.(e);
+-        },
+-        [onKeyUp],
+-    );
++    const [active, interactiveProps] = useInteractiveAttributes(!disabled, props, ref);
+ 
+     const className = classNames(
+         Classes.BUTTON,
+         {
+-            [Classes.ACTIVE]: !disabled && (active || isActive),
++            [Classes.ACTIVE]: active,
+             [Classes.DISABLED]: disabled,
+             [Classes.FILL]: fill,
+             [Classes.LARGE]: large,
+@@ -150,15 +97,9 @@ function useSharedButtonAttributes<E extends HTMLAnchorElement | HTMLButtonEleme
+     );
+ 
+     return {
++        ...interactiveProps,
+         className,
+         disabled,
+-        onBlur: handleBlur,
+-        onClick: disabled ? undefined : props.onClick,
+-        onFocus: disabled ? undefined : props.onFocus,
+-        onKeyDown: handleKeyDown,
+-        onKeyUp: handleKeyUp,
+-        ref: mergeRefs(buttonRef, ref),
+-        tabIndex: disabled ? -1 : tabIndex,
+     };
+ }
+ 
+@@ -184,10 +125,6 @@ function renderButtonContents<E extends HTMLAnchorElement | HTMLButtonElement>(
+                     {text}
+                     {children}
+                 </Text>
+-                // <span key=""text"" className={classNames(Classes.BUTTON_TEXT, textClassName)}>
+-                //     {text}
+-                //     {children}
+-                // </span>
+             )}
+             <Icon key=""rightIcon"" icon={rightIcon} />
+         </>
+
+
+diff --git a/packages/core/src/components/tag/tag.tsx b/packages/core/src/components/tag/tag.tsx
+index 9d0cac42d7..144cb7adf0 100644
+--- a/packages/core/src/components/tag/tag.tsx
++++ b/packages/core/src/components/tag/tag.tsx
+@@ -19,6 +19,7 @@ import * as React from ""react"";
+ 
+ import type { IconName } from ""@blueprintjs/icons"";
+ 
++import { useInteractiveAttributes } from ""../../accessibility/useInteractiveAttributes"";
+ import { Classes, DISPLAYNAME_PREFIX, type IntentProps, type MaybeElement, type Props, Utils } from ""../../common"";
+ import { isReactNodeEmpty } from ""../../common/utils"";
+ import { Icon } from ""../icon/icon"";
+@@ -72,13 +73,12 @@ export interface TagProps
+  */
+ export const Tag: React.FC<TagProps> = React.forwardRef((props, ref) => {
+     const {
+-        active,
+         children,
+         className,
+         fill,
+         icon,
+         intent,
+-        interactive,
++        interactive = false,
+         large,
+         minimal,
+         multiline,
+@@ -92,6 +92,8 @@ export const Tag: React.FC<TagProps> = React.forwardRef((props, ref) => {
+ 
+     const isRemovable = Utils.isFunction(onRemove);
+ 
++    const [active, interactiveProps] = useInteractiveAttributes(interactive, props, ref, 0);
++
+     const tagClasses = classNames(
+         Classes.TAG,
+         Classes.intentClass(intent),
+@@ -107,7 +109,7 @@ export const Tag: React.FC<TagProps> = React.forwardRef((props, ref) => {
+     );
+ 
+     return (
+-        <span {...htmlProps} className={tagClasses} tabIndex={interactive ? tabIndex : undefined} ref={ref}>
++        <span {...htmlProps} {...interactiveProps} className={tagClasses}>
+             <Icon icon={icon} />
+             {!isReactNodeEmpty(children) && (
+                 <Text className={Classes.FILL} ellipsize={!multiline} tagName=""span"" title={htmlTitle}>
+",,"#### Fixes https://github.com/palantir/blueprint/issues/4782
+
+#### Changes proposed in this pull request:
+
+In this PR we pull out the common accessibility functionality from the button components to be shared with the tag component. This enables the tag component to be keyboard accessible when `interactive={true}`
+","#### Code Sandbox
+https://codesandbox.io/s/palantir-blueprint-forked-s0reo
+
+#### Steps to reproduce
+1. click tag, observe onClick handler works
+2. use tab to navigate to tag, onClick does not fire with spacebar or enter
+
+`Button` included to show expected behavior
+
+#### Actual behavior
+`onClick` of `Tag` does not fire with spacebar or enter press when focused
+
+#### Expected behavior
+spacebar/enter should trigger `onClick` of `Tag`
+
+#### Possible solution
+if `Tag` has `onClick` defined, render as a button but with the `Tag` styles"
+https://github.com/palantir/blueprint/pull/6960,,894a7d89810025296f8efaf270ad98f728d3a7b9,a7d0cd5ed9eed42186342af48103d10cfc3ad4c8,2024-09-04T17:35:08Z,"diff --git a/packages/datetime/src/components/timezone-select/timezoneSelect.tsx b/packages/datetime/src/components/timezone-select/timezoneSelect.tsx
+index 56e1303fb6..4bd76d6611 100644
+--- a/packages/datetime/src/components/timezone-select/timezoneSelect.tsx
++++ b/packages/datetime/src/components/timezone-select/timezoneSelect.tsx
+@@ -179,6 +179,7 @@ export class TimezoneSelect extends AbstractPureComponent<TimezoneSelectProps, T
+                     ...popoverProps,
+                     popoverClassName: classNames(Classes.TIMEZONE_SELECT_POPOVER, popoverProps?.popoverClassName),
+                 }}
++                popoverTargetProps={{ ""aria-label"": ""timezone"" }}
+                 resetOnClose={true}
+                 resetOnSelect={true}
+             >
+",,"#### Changes proposed in this pull request:
+
+Add aria-label to timezone select to fix a11y aXe failure.",
+https://github.com/palantir/blueprint/pull/6950,https://github.com/palantir/blueprint/issues/6859,4d328963a93af921cb64b2e797f7b0ea2ee530b7,39f0a833ee26fd0626a37c9fc090d6916f0ebba4,2024-08-26T14:11:03Z,"diff --git a/packages/core/src/components/forms/_file-input.scss b/packages/core/src/components/forms/_file-input.scss
+index 8bb06c0694..57812d3616 100644
+--- a/packages/core/src/components/forms/_file-input.scss
++++ b/packages/core/src/components/forms/_file-input.scss
+@@ -64,6 +64,17 @@ $file-input-button-padding-small: ($pt-input-height-small - $pt-button-height-sm
+         }
+       }
+     }
++
++    // borrows focus styles from pt-input and pt-dark-input mixins (see _common.scss)
++    &:focus + .#{$ns}-file-upload-input {
++      box-shadow: input-transition-shadow($input-shadow-color-focus, true),
++        $input-box-shadow-focus;
++
++      .#{$ns}-dark & {
++        box-shadow: dark-input-transition-shadow($dark-input-shadow-color-focus, true),
++          $pt-dark-input-box-shadow;
++      }
++    }
+   }
+ 
+   &.#{$ns}-file-input-has-selection {
+",,"#### Fixes #6859
+
+#### Checklist
+
+- [N/A] Includes tests
+- [N/A] Update documentation
+
+<!-- DO NOT enable CircleCI for your fork. Our build will run when you open this PR. -->
+
+#### Changes proposed in this pull request:
+
+Add visual focus styles to [FileInput](https://blueprintjs.com/docs/#core/components/file-input) to match other input components.
+
+#### Reviewers should focus on:
+
+<!-- Fill this out. -->
+
+#### Screenshot
+
+##### Focus (light mode)
+| Before | After    |
+| ------  | ------  |
+| ![before](https://github.com/user-attachments/assets/c04bf787-f2dc-4f32-b7a0-9ddba4cd8c9f) | ![after](https://github.com/user-attachments/assets/0eddb4e5-c346-48bd-85bf-f6fa7fd686da) |
+
+##### Focus (dark mode)
+| Before | After |
+| ------  | ------  |
+| ![before](https://github.com/user-attachments/assets/e48b4afe-14b6-4901-8b1c-bfb662a5af55) | ![after](https://github.com/user-attachments/assets/bc6f3685-4bd8-470e-82ea-5f02a0f0058e) |
+
+![Screenshot 2024-08-26 at 10 11 32](https://github.com/user-attachments/assets/d8b2cd82-1131-45fe-a848-47a4a2b41ed8)
+
+
+","#### Steps to reproduce
+See https://blueprintjs.com/docs/#core/components/file-input
+
+#### Actual behavior
+`FileInput` component can be focused, and the file selector opened with an enter keypress, but there is no visual focus state
+
+#### Expected behavior
+`FileInput` should support a visual focus indication similar to other input components
+
+#### Possible solution
+Add same visual focus indication as `InputGroup`/`NumericInput`/`TextArea` and others"
+https://github.com/palantir/blueprint/pull/6803,https://github.com/palantir/blueprint/issues/3834,03b304f39ca9d5701363bb9dbb1dc3ce09aa4b20,7b73100c16840254ce260e9d543347d72c09bc55,2024-05-15T18:15:08Z,"diff --git a/packages/table/src/tableHotkeys.ts b/packages/table/src/tableHotkeys.ts
+index 3aa2bcfe6a..8103661a9d 100644
+--- a/packages/table/src/tableHotkeys.ts
++++ b/packages/table/src/tableHotkeys.ts
+@@ -144,9 +144,6 @@ export class TableHotkeys {
+     // no good way to call arrow-key keyboard events from tests
+     /* istanbul ignore next */
+     private handleFocusMove = (e: KeyboardEvent, direction: ""up"" | ""down"" | ""left"" | ""right"") => {
+-        e.preventDefault();
+-        e.stopPropagation();
+-
+         const { focusedCell } = this.state;
+         if (focusedCell == null) {
+             // halt early if we have a selectedRegionTransform or something else in play that nixes
+@@ -186,6 +183,9 @@ export class TableHotkeys {
+             return;
+         }
+ 
++        e.preventDefault();
++        e.stopPropagation();
++
+         // change selection to match new focus cell location
+         const newSelectionRegions = [Regions.cell(newFocusedCell.row, newFocusedCell.col)];
+         const { selectedRegionTransform } = this.props;
+@@ -203,9 +203,6 @@ export class TableHotkeys {
+     // no good way to call arrow-key keyboard events from tests
+     /* istanbul ignore next */
+     private handleFocusMoveInternal = (e: KeyboardEvent, direction: ""up"" | ""down"" | ""left"" | ""right"") => {
+-        e.preventDefault();
+-        e.stopPropagation();
+-
+         const { focusedCell, selectedRegions } = this.state;
+ 
+         if (focusedCell == null) {
+@@ -281,6 +278,9 @@ export class TableHotkeys {
+             return;
+         }
+ 
++        e.preventDefault();
++        e.stopPropagation();
++
+         this.tableHandlers.handleFocus(newFocusedCell);
+ 
+         // keep the focused cell in view
+",,"#### Fixes https://github.com/palantir/blueprint/issues/3834
+
+#### Checklist
+
+- [ ] Includes tests
+- [x] Update documentation
+  - testable in existing table docs
+
+#### Changes proposed in this pull request:
+
+Immediately preventing default on tab key presses seems problematic since sometimes we return early and do nothing on the tab key press. This happens when the selection is already at the edge of the table and will not move further. This PR proposes that in these cases we should allow focus to freely leave the table.
+
+I considered other solutions including:
+- Making this a new optional option.
+    - In the next major version, this option could be defaulted to true, and possibly removed in the future if we see no valid cases where trapping focus is desired.
+- Introducing a new pattern to move focus into the table, such as Enter when the table is focused to switch to current behavior, and otherwise have the table be a single element in the tab order.
+    - Esc would ""exit"" this interaction mode
+    - Big downside of not being very discoverable
+- Are there other best practices for table interaction to consider?
+
+#### Reviewers should focus on:
+
+- Is this the interaction pattern we want?
+- Should this be applied as a fix, or a new option?
+
+#### Screenshot
+
+n/a","<!-- IF YOU ARE A PALANTIR EMPLOYEE, DO NOT POST INTERNAL LINKS OR REFERENCES HERE -->
+
+#### Environment
+
+- __Package version(s)__: <!-- fill this out --> Blueprint table 3.8.1
+- __Browser and OS versions__: <!-- fill this out --> Chrome
+
+If possible, link to a minimal repro (fork [this code sandbox](https://codesandbox.io/s/blueprint-sandbox-et9xy)): https://codesandbox.io/s/blueprint-sandbox-hiwri
+
+#### Steps to reproduce
+
+1. Use tab key to move focus into blueprint table
+
+#### Actual behavior
+
+It's not possible to move focus out of the table using the keyboard - as demonstrated in repo above, once focus is in the table you cannot tab to either button on the page
+
+#### Expected behavior
+
+You should be able to tab back to the previous or onto the next element on the page.
+"
+https://github.com/palantir/blueprint/pull/6697,,66e1c0e00aad46b911e2c050ddb9d5810ca55050,8768a3098c9ed4cbe595eeecea851a6f4c31f374,2024-02-03T04:51:13Z,"diff --git a/packages/core/src/common/utils/domUtils.ts b/packages/core/src/common/utils/domUtils.ts
+index dea1ad826f..9deb896fde 100644
+--- a/packages/core/src/common/utils/domUtils.ts
++++ b/packages/core/src/common/utils/domUtils.ts
+@@ -150,6 +150,14 @@ function throttleImpl<T extends Function>(
+ }
+ 
+ export function clickElementOnKeyPress(keys: string[]) {
+-    return (e: React.KeyboardEvent) =>
+-        keys.some(key => e.key === key) && e.target.dispatchEvent(new MouseEvent(""click"", { ...e, view: undefined }));
++    return (e: React.KeyboardEvent) => {
++        if (keys.some(key => e.key === key)) {
++            // Prevent spacebar from scrolling the page unless we're in a text field
++            if (!elementIsTextInput(e.target as HTMLElement)) {
++                e.preventDefault();
++            }
++
++            e.target.dispatchEvent(new MouseEvent(""click"", { ...e, view: undefined }));
++        }
++    };
+ }
+
+
+diff --git a/packages/docs-app/src/examples/core-examples/menuExample.tsx b/packages/docs-app/src/examples/core-examples/menuExample.tsx
+index c046dce8ee..23b9bf8f34 100644
+--- a/packages/docs-app/src/examples/core-examples/menuExample.tsx
++++ b/packages/docs-app/src/examples/core-examples/menuExample.tsx
+@@ -16,13 +16,14 @@
+ 
+ import * as React from ""react"";
+ 
+-import { Classes, H5, Icon, Menu, MenuDivider, MenuItem } from ""@blueprintjs/core"";
++import { Classes, H5, Icon, InputGroup, Menu, MenuDivider, MenuItem } from ""@blueprintjs/core"";
+ import { Example, type ExampleProps } from ""@blueprintjs/docs-theme"";
+ 
+ import { getSizeProp, type Size, SizeSelect } from ""./common/sizeSelect"";
+ 
+ export function MenuExample(props: ExampleProps) {
+     const [size, setSize] = React.useState<Size>(""regular"");
++    const [count, setCount] = React.useState<number>(0);
+ 
+     const options = (
+         <>
+@@ -39,6 +40,12 @@ export function MenuExample(props: ExampleProps) {
+                 <MenuItem icon=""new-object"" text=""New object"" />
+                 <MenuItem icon=""new-link"" text=""New link"" />
+                 <MenuDivider />
++                <MenuItem
++                    icon=""calculator""
++                    labelElement={count}
++                    onClick={() => setCount(oldCount => oldCount + 1)}
++                    text=""Increment""
++                />
+                 <MenuItem icon=""cog"" labelElement={<Icon icon=""share"" />} text=""Settings..."" intent=""primary"" />
+             </Menu>
+             <Menu className={Classes.ELEVATION_1} {...getSizeProp(size)}>
+@@ -61,6 +68,12 @@ export function MenuExample(props: ExampleProps) {
+                 <MenuItem icon=""asterisk"" text=""Miscellaneous"">
+                     <MenuItem icon=""badge"" text=""Badge"" />
+                     <MenuItem icon=""book"" text=""Long items will truncate when they reach max-width"" />
++                    <MenuItem
++                        icon=""edit""
++                        text=""Set name""
++                        labelElement={<InputGroup small={true} placeholder=""Item name..."" />}
++                        shouldDismissPopover={false}
++                    />
+                     <MenuItem icon=""more"" text=""Look in here for even more items"">
+                         <MenuItem icon=""briefcase"" text=""Briefcase"" />
+                         <MenuItem icon=""calculator"" text=""Calculator"" />
+",,"This fixes a small bug that caused the page to scroll when a user selected a `<MenuItem>` using the spacebar, which is visible on the Menu [docs page](https://blueprintjs.com/docs/#core/components/menu).",
+https://github.com/palantir/blueprint/pull/6506,,ec22071d9e963ee681ab224fb32f54e669efdc2b,df48fb2dd08a99633555dc9b317e2f0a2b6bf87e,2023-11-03T22:05:54Z,"diff --git a/packages/core/src/components/section/section.tsx b/packages/core/src/components/section/section.tsx
+index b14fc4e39b3..317b598b34c 100644
+--- a/packages/core/src/components/section/section.tsx
++++ b/packages/core/src/components/section/section.tsx
+@@ -21,6 +21,7 @@ import { ChevronDown, ChevronUp, type IconName } from ""@blueprintjs/icons"";
+ 
+ import { Classes, Elevation, Utils } from ""../../common"";
+ import { DISPLAYNAME_PREFIX, type HTMLDivProps, type MaybeElement, type Props } from ""../../common/props"";
++import { uniqueId } from ""../../common/utils"";
+ import { Card } from ""../card/card"";
+ import { Collapse, type CollapseProps } from ""../collapse/collapse"";
+ import { H6 } from ""../html/html"";
+@@ -110,6 +111,15 @@ export interface SectionProps extends Props, Omit<HTMLDivProps, ""title"">, React.
+      * Note that the header will only be rendered if `title` is provided.
+      */
+     title?: JSX.Element | string;
++
++    /**
++     * Optional title renderer function. If provided, it is recommended to include a Blueprint `<H6>` element
++     * as part of the title. The render function is supplied with `className` and `id` attributes which you must
++     * forward to the DOM.
++     *
++     * @default H6
++     */
++    titleRenderer?: React.FC<React.HTMLAttributes<HTMLElement>>;
+ }
+ 
+ /**
+@@ -129,6 +139,7 @@ export const Section: React.FC<SectionProps> = React.forwardRef((props, ref) =>
+         rightElement,
+         subtitle,
+         title,
++        titleRenderer = H6,
+         ...htmlProps
+     } = props;
+     // Determine whether to use controlled or uncontrolled state.
+@@ -147,9 +158,11 @@ export const Section: React.FC<SectionProps> = React.forwardRef((props, ref) =>
+         }
+     }, [collapseProps, isCollapsed, isControlled]);
+ 
+-    const isHeaderLeftContainerVisible = title != null || icon != null || subtitle != null;
+     const isHeaderRightContainerVisible = rightElement != null || collapsible;
+ 
++    const sectionId = uniqueId(""section"");
++    const sectionTitleId = title ? uniqueId(""section-title"") : undefined;
++
+     return (
+         <Card
+             className={classNames(className, Classes.SECTION, {
+@@ -158,38 +171,36 @@ export const Section: React.FC<SectionProps> = React.forwardRef((props, ref) =>
+             })}
+             elevation={elevation}
+             ref={ref}
++            aria-labelledby={sectionTitleId}
+             {...htmlProps}
++            id={sectionId}
+         >
+             {title && (
+                 <div
+                     role={collapsible ? ""button"" : undefined}
+                     aria-pressed={collapsible ? isCollapsed : undefined}
++                    aria-expanded={collapsible ? isCollapsed : undefined}
++                    aria-controls={collapsible ? sectionId : undefined}
+                     className={classNames(Classes.SECTION_HEADER, {
+                         [Classes.INTERACTIVE]: collapsible,
+                     })}
+-                    onClick={collapsible != null ? toggleIsCollapsed : undefined}
++                    onClick={collapsible ? toggleIsCollapsed : undefined}
+                 >
+-                    {isHeaderLeftContainerVisible && (
+-                        <>
+-                            <div className={Classes.SECTION_HEADER_LEFT}>
+-                                {icon && (
+-                                    <Icon icon={icon} aria-hidden={true} tabIndex={-1} className={Classes.TEXT_MUTED} />
+-                                )}
+-
+-                                <div>
+-                                    <H6 className={Classes.SECTION_HEADER_TITLE}>{title}</H6>
+-                                    {subtitle && (
+-                                        <div
+-                                            className={classNames(Classes.TEXT_MUTED, Classes.SECTION_HEADER_SUB_TITLE)}
+-                                        >
+-                                            {subtitle}
+-                                        </div>
+-                                    )}
++                    <div className={Classes.SECTION_HEADER_LEFT}>
++                        {icon && <Icon icon={icon} aria-hidden={true} tabIndex={-1} className={Classes.TEXT_MUTED} />}
++                        <div>
++                            {React.createElement(
++                                titleRenderer,
++                                { className: Classes.SECTION_HEADER_TITLE, id: sectionTitleId },
++                                title,
++                            )}
++                            {subtitle && (
++                                <div className={classNames(Classes.TEXT_MUTED, Classes.SECTION_HEADER_SUB_TITLE)}>
++                                    {subtitle}
+                                 </div>
+-                            </div>
+-                        </>
+-                    )}
+-
++                            )}
++                        </div>
++                    </div>
+                     {isHeaderRightContainerVisible && (
+                         <div className={Classes.SECTION_HEADER_RIGHT}>
+                             {rightElement}
+","diff --git a/packages/core/test/section/sectionTests.tsx b/packages/core/test/section/sectionTests.tsx
+index 9aaab168677..cad003839a9 100644
+--- a/packages/core/test/section/sectionTests.tsx
++++ b/packages/core/test/section/sectionTests.tsx
+@@ -20,7 +20,7 @@ import * as React from ""react"";
+ 
+ import { IconNames } from ""@blueprintjs/icons"";
+ 
+-import { Classes, H6, Section, SectionCard } from ""../../src"";
++import { Classes, H5, H6, Section, SectionCard } from ""../../src"";
+ 
+ describe(""<Section>"", () => {
+     let containerElement: HTMLElement | undefined;
+@@ -73,6 +73,13 @@ describe(""<Section>"", () => {
+         assert.isTrue(wrapper.find(`.${Classes.SECTION_HEADER_SUB_TITLE}`).hostNodes().exists());
+     });
+ 
++    it(""renders custom title element with titleRenderer"", () => {
++        const wrapper = mount(<Section title=""title"" titleRenderer={H5} />, {
++            attachTo: containerElement,
++        });
++        assert.isTrue(wrapper.find(H5).exists());
++    });
++
+     describe(""uncontrolled collapse mode"", () => {
+         it(""collapsible is open when defaultIsOpen={undefined}"", () => {
+             const wrapper = mount(
+","Improve a11y on the `Section` component by adding various `aria` props.
+
+- [X] Includes tests",
+https://github.com/palantir/blueprint/pull/6092,https://github.com/palantir/blueprint/issues/5775,cef991a8f398d07620d91e62e4e38008f6636815,db161b4aa566bd523edc83954d910f629a0d6439,2023-04-27T17:50:04Z,"diff --git a/packages/popover2/src/popover2.tsx b/packages/popover2/src/popover2.tsx
+index 7b0fb46f14f..02adc4024b5 100644
+--- a/packages/popover2/src/popover2.tsx
++++ b/packages/popover2/src/popover2.tsx
+@@ -353,9 +353,7 @@ export class Popover2<
+                       // CLICK needs only one handler
+                       onClick: this.handleTargetClick,
+                       // For keyboard accessibility, trigger the same behavior as a click event upon pressing ENTER/SPACE
+-                      onKeyDown: (event: React.KeyboardEvent<HTMLElement>) =>
+-                          // eslint-disable-next-line deprecation/deprecation
+-                          Keys.isKeyboardClick(event.keyCode) && this.handleTargetClick(event),
++                      onKeyDown: this.handleKeyDown,
+                   };
+         // Ensure target is focusable if relevant prop enabled
+         const targetTabIndex = openOnTargetFocus && isHoverInteractionKind ? 0 : undefined;
+@@ -693,17 +691,36 @@ export class Popover2<
+         }
+     };
+ 
++    private handleKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
++        // eslint-disable-next-line deprecation/deprecation
++        const isKeyboardClick = Keys.isKeyboardClick(e.keyCode);
++
++        // For keyboard accessibility, trigger the same behavior as a click event upon pressing ENTER/SPACE
++        if (isKeyboardClick) {
++            this.handleTargetClick(e);
++        }
++    };
++
+     private handleTargetClick = (e: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>) => {
+-        // ensure click did not originate from within inline popover before closing
+-        if (!this.props.disabled && !this.isElementInPopover(e.target as HTMLElement)) {
+-            if (this.props.isOpen == null) {
+-                this.setState(prevState => ({ isOpen: !prevState.isOpen }));
+-            } else {
+-                this.setOpenState(!this.props.isOpen, e);
++        // Target element(s) may fire simulated click event upon pressing ENTER/SPACE, which we should ignore
++        // see: https://github.com/palantir/blueprint/issues/5775
++        const shouldIgnoreClick = this.state.isOpen && this.isSimulatedButtonClick(e);
++        if (!shouldIgnoreClick) {
++            // ensure click did not originate from within inline popover before closing
++            if (!this.props.disabled && !this.isElementInPopover(e.target as HTMLElement)) {
++                if (this.props.isOpen == null) {
++                    this.setState(prevState => ({ isOpen: !prevState.isOpen }));
++                } else {
++                    this.setOpenState(!this.props.isOpen, e);
++                }
+             }
+         }
+     };
+ 
++    private isSimulatedButtonClick = (e: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>) => {
++        return !e.isTrusted && (e.target as HTMLElement).matches(`.${CoreClasses.BUTTON}`);
++    };
++
+     // a wrapper around setState({ isOpen }) that will call props.onInteraction instead when in controlled mode.
+     // starts a timeout to delay changing the state if a non-zero duration is provided.
+     private setOpenState(isOpen: boolean, e?: React.SyntheticEvent<HTMLElement>, timeout?: number) {
+","diff --git a/packages/popover2/test/index.ts b/packages/popover2/test/index.ts
+index 960233b4b79..8b0eca603bb 100644
+--- a/packages/popover2/test/index.ts
++++ b/packages/popover2/test/index.ts
+@@ -13,6 +13,10 @@
+  * limitations under the License.
+  */
+ 
++// eslint-disable-next-line @typescript-eslint/tslint/config
++import ""@blueprintjs/core/lib/css/blueprint.css"";
++import ""../lib/css/blueprint-popover2.css"";
++
+ import ""@blueprintjs/test-commons/bootstrap"";
+ 
+ import ""./breadcrumbs2Tests"";
+
+
+diff --git a/packages/popover2/test/popover2Tests.tsx b/packages/popover2/test/popover2Tests.tsx
+index 1abcd37dde3..0b0b57d6c16 100644
+--- a/packages/popover2/test/popover2Tests.tsx
++++ b/packages/popover2/test/popover2Tests.tsx
+@@ -19,7 +19,7 @@ import { mount, ReactWrapper, shallow } from ""enzyme"";
+ import * as React from ""react"";
+ import * as sinon from ""sinon"";
+ 
+-import { Classes as CoreClasses, Menu, MenuItem, Overlay, Portal } from ""@blueprintjs/core"";
++import { Button, Classes as CoreClasses, Keys, Menu, MenuItem, Overlay, Portal } from ""@blueprintjs/core"";
+ import { dispatchMouseEvent } from ""@blueprintjs/test-commons"";
+ 
+ import { Classes, Errors } from ""../src"";
+@@ -104,7 +104,7 @@ describe(""<Popover2>"", () => {
+         it(""warns and disables if given empty content"", () => {
+             const popover = mount(
+                 <Popover2 content={undefined} isOpen={true}>
+-                    <button />
++                    <Button />
+                 </Popover2>,
+             );
+             assert.isFalse(popover.find(Overlay).exists(), ""not open for undefined content"");
+@@ -132,7 +132,7 @@ describe(""<Popover2>"", () => {
+                             hasBackdrop={true}
+                             interactionKind={Popover2InteractionKind[interactionKindKey]}
+                         >
+-                            <button />
++                            <Button />
+                         </Popover2>,
+                     );
+                     assert.isTrue(warnSpy.calledWith(Errors.POPOVER2_HAS_BACKDROP_INTERACTION));
+@@ -373,7 +373,7 @@ describe(""<Popover2>"", () => {
+ 
+         function assertPopoverTargetTabIndex(shouldTabIndexExist: boolean, popoverProps: Partial<IPopover2Props>) {
+             wrapper = renderPopover({ ...popoverProps, usePortal: true });
+-            const targetElement = wrapper.find(""[data-testid='target-button']"").getDOMNode();
++            const targetElement = wrapper.find(""[data-testid='target-button']"").hostNodes().getDOMNode();
+ 
+             if (shouldTabIndexExist) {
+                 assert.equal(targetElement.getAttribute(""tabindex""), ""0"");
+@@ -478,7 +478,7 @@ describe(""<Popover2>"", () => {
+             it(""is invoked with `false` when clicking POPOVER2_DISMISS"", () => {
+                 renderPopover(
+                     { isOpen: true, onInteraction },
+-                    <button className={Classes.POPOVER2_DISMISS}>Dismiss</button>,
++                    <Button className={Classes.POPOVER2_DISMISS}>Dismiss</Button>,
+                 )
+                     .findClass(Classes.POPOVER2_DISMISS)
+                     .simulate(""click"");
+@@ -563,16 +563,16 @@ describe(""<Popover2>"", () => {
+         it(""clicking POPOVER2_DISMISS closes popover when usePortal=true"", () => {
+             wrapper = renderPopover(
+                 { defaultIsOpen: true, usePortal: true },
+-                <button className={Classes.POPOVER2_DISMISS}>Dismiss</button>,
++                <Button className={Classes.POPOVER2_DISMISS}>Dismiss</Button>,
+             );
+-            wrapper.find(Portal).find(`.${Classes.POPOVER2_DISMISS}`).simulate(""click"");
++            wrapper.find(Portal).find(`.${Classes.POPOVER2_DISMISS}`).hostNodes().simulate(""click"");
+             wrapper.update().assertIsOpen(false);
+         });
+ 
+         it(""clicking POPOVER2_DISMISS closes popover when usePortal=false"", () => {
+             wrapper = renderPopover(
+                 { defaultIsOpen: true, usePortal: false },
+-                <button className={Classes.POPOVER2_DISMISS}>Dismiss</button>,
++                <Button className={Classes.POPOVER2_DISMISS}>Dismiss</Button>,
+             );
+             wrapper.findClass(Classes.POPOVER2_DISMISS).simulate(""click"");
+             wrapper.assertIsOpen(false);
+@@ -624,7 +624,7 @@ describe(""<Popover2>"", () => {
+             root = mount(
+                 <Popover2 content=""popover"" hoverOpenDelay={0} hoverCloseDelay={0} usePortal={false}>
+                     <Tooltip2 content=""tooltip"" hoverOpenDelay={0} hoverCloseDelay={0} usePortal={false}>
+-                        <button>Target</button>
++                        <Button text=""Target"" />
+                     </Tooltip2>
+                 </Popover2>,
+                 { attachTo: testsContainerElement },
+@@ -661,8 +661,8 @@ describe(""<Popover2>"", () => {
+ 
+         it(""matches target width via custom modifier"", () => {
+             wrapper = renderPopover({ matchTargetWidth: true, isOpen: true, placement: ""bottom"" });
+-            const targetElement = wrapper.find(""[data-testid='target-button']"").getDOMNode();
+-            const popoverElement = wrapper.find(`.${Classes.POPOVER2}`).getDOMNode();
++            const targetElement = wrapper.find(""[data-testid='target-button']"").hostNodes().getDOMNode();
++            const popoverElement = wrapper.find(`.${Classes.POPOVER2}`).hostNodes().getDOMNode();
+             assert.closeTo(
+                 popoverElement.clientWidth,
+                 targetElement.clientWidth,
+@@ -675,27 +675,27 @@ describe(""<Popover2>"", () => {
+     describe(""closing on click"", () => {
+         it(""Classes.POPOVER2_DISMISS closes on click"", () =>
+             assertClickToClose(
+-                <button className={Classes.POPOVER2_DISMISS} id=""btn"">
++                <Button className={Classes.POPOVER2_DISMISS} id=""btn"">
+                     Dismiss
+-                </button>,
++                </Button>,
+                 false,
+             ));
+ 
+         it(""Classes.POPOVER2_DISMISS_OVERRIDE does not close"", () =>
+             assertClickToClose(
+                 <span className={Classes.POPOVER2_DISMISS}>
+-                    <button className={Classes.POPOVER2_DISMISS_OVERRIDE} id=""btn"">
++                    <Button className={Classes.POPOVER2_DISMISS_OVERRIDE} id=""btn"">
+                         Dismiss
+-                    </button>
++                    </Button>
+                 </span>,
+                 true,
+             ));
+ 
+         it("":disabled does not close"", () =>
+             assertClickToClose(
+-                <button className={Classes.POPOVER2_DISMISS} disabled={true} id=""btn"">
++                <Button className={Classes.POPOVER2_DISMISS} disabled={true} id=""btn"">
+                     Dismiss
+-                </button>,
++                </Button>,
+                 true,
+             ));
+ 
+@@ -703,9 +703,9 @@ describe(""<Popover2>"", () => {
+             assertClickToClose(
+                 // testing nested behavior too
+                 <div className={CoreClasses.DISABLED}>
+-                    <button className={Classes.POPOVER2_DISMISS} id=""btn"">
++                    <Button className={Classes.POPOVER2_DISMISS} id=""btn"">
+                         Dismiss
+-                    </button>
++                    </Button>
+                 </div>,
+                 true,
+             ));
+@@ -717,12 +717,12 @@ describe(""<Popover2>"", () => {
+                     defaultIsOpen={true}
+                     usePortal={false}
+                     content={
+-                        <button className={Classes.POPOVER2_DISMISS} id=""btn"">
++                        <Button className={Classes.POPOVER2_DISMISS} id=""btn"">
+                             Dismiss
+-                        </button>
++                        </Button>
+                     }
+                 >
+-                    <button>Target</button>
++                    <Button>Target</Button>
+                 </Popover2>,
+                 true,
+             ));
+@@ -734,19 +734,19 @@ describe(""<Popover2>"", () => {
+                     defaultIsOpen={true}
+                     usePortal={false}
+                     content={
+-                        <button className={Classes.POPOVER2_DISMISS} id=""btn"">
++                        <Button className={Classes.POPOVER2_DISMISS} id=""btn"">
+                             Dismiss
+-                        </button>
++                        </Button>
+                     }
+                 >
+-                    <button>Target</button>
++                    <Button>Target</Button>
+                 </Popover2>,
+                 false,
+             ));
+ 
+         function assertClickToClose(children: React.ReactNode, expectedIsOpen: boolean) {
+             wrapper = renderPopover({ defaultIsOpen: true }, children);
+-            wrapper.find(""#btn"").simulate(""click"");
++            wrapper.find(""#btn"").hostNodes().simulate(""click"");
+             wrapper.assertIsOpen(expectedIsOpen);
+         }
+     });
+@@ -780,6 +780,47 @@ describe(""<Popover2>"", () => {
+         });
+     });
+ 
++    describe(""key interactions on Button target"", () => {
++        const SPACE_KEYSTROKE = { keyCode: Keys.SPACE, which: Keys.SPACE };
++
++        describe(""Enter key down opens click interaction popover"", () => {
++            it(""when autoFocus={true}"", done => {
++                wrapper = renderPopover({ autoFocus: true });
++                const button = wrapper.find(""[data-testid='target-button']"").hostNodes();
++                (button.getDOMNode() as HTMLElement).focus();
++                button.simulate(""keyDown"", SPACE_KEYSTROKE);
++                // Wait for focus to change
++                wrapper.then(wrap => {
++                    // Expect focus is now within popover, so keyup would not happen on the button
++                    assert.isFalse(
++                        wrap.targetElement.contains(document.activeElement),
++                        ""Focus was unexpectedly in target"",
++                    );
++                    wrap.simulateContent(""keyUp"", SPACE_KEYSTROKE);
++                    wrap.assertIsOpen();
++                }, done);
++            });
++
++            it(""when autoFocus={false}"", done => {
++                wrapper = renderPopover({ autoFocus: false });
++                const button = wrapper.find(""[data-testid='target-button']"").hostNodes();
++                (button.getDOMNode() as HTMLElement).focus();
++                button.simulate(""keyDown"", SPACE_KEYSTROKE);
++
++                // Wait for focus to change (it shouldn't)
++                wrapper.then(wrap => {
++                    // Expect focus is still on button
++                    assert.isTrue(
++                        wrap.targetElement.contains(document.activeElement),
++                        ""Focus was expected to be in target"",
++                    );
++                    wrap.simulateContent(""keyUp"", SPACE_KEYSTROKE);
++                    wrap.assertIsOpen();
++                }, done);
++            });
++        });
++    });
++
+     describe(""compatibility"", () => {
+         // this test can be removed once Popover2 is merged into core in v5.0
+         it(""MenuItem from core package is able to dismiss open Popover2"", () => {
+@@ -801,10 +842,15 @@ describe(""<Popover2>"", () => {
+                     hoverCloseDelay={0}
+                     hoverOpenDelay={0}
+                     content=""content""
++                    popoverClassName={Classes.POPOVER2_CONTENT_SIZING}
+                     renderTarget={({ isOpen, ref, ...props }) => (
+-                        <button data-testid=""target-button"" ref={ref} onClick={props.onClick} {...props}>
+-                            Target
+-                        </button>
++                        <Button
++                            data-testid=""target-button""
++                            elementRef={ref}
++                            onClick={props.onClick}
++                            text=""Target""
++                            {...props}
++                        />
+                     )}
+                 />,
+                 { attachTo: testsContainerElement },
+@@ -818,22 +864,23 @@ describe(""<Popover2>"", () => {
+         assertFindClass(className: string, expected?: boolean, msg?: string): this;
+         assertIsOpen(isOpen?: boolean): this;
+         assertOnInteractionCalled(called?: boolean): this;
+-        simulateTarget(eventName: string): this;
++        simulateContent(eventName: string, ...args: any[]): this;
++        simulateTarget(eventName: string, ...args: any[]): this;
+         findClass(className: string): ReactWrapper<React.HTMLAttributes<HTMLElement>, any>;
+         sendEscapeKey(): this;
+         then(next: (wrap: IPopover2Wrapper) => void, done: Mocha.Done): this;
+     }
+ 
+     function renderPopover(props: Partial<IPopover2Props> = {}, content?: any) {
++        const contentElement = (
++            <div tabIndex={0} className=""test-content"">
++                Text {content}
++            </div>
++        );
++
+         wrapper = mount(
+-            <Popover2
+-                usePortal={false}
+-                {...props}
+-                hoverCloseDelay={0}
+-                hoverOpenDelay={0}
+-                content={<div>Text {content}</div>}
+-            >
+-                <button data-testid=""target-button"">Target</button>
++            <Popover2 usePortal={false} {...props} hoverCloseDelay={0} hoverOpenDelay={0} content={contentElement}>
++                <Button data-testid=""target-button"" text=""Target"" />
+             </Popover2>,
+             { attachTo: testsContainerElement },
+         ) as IPopover2Wrapper;
+@@ -860,8 +907,12 @@ describe(""<Popover2>"", () => {
+             return wrapper!;
+         };
+         wrapper.findClass = (className: string) => wrapper!.find(`.${className}`).hostNodes();
+-        wrapper.simulateTarget = (eventName: string) => {
+-            wrapper!.findClass(Classes.POPOVER2_TARGET).simulate(eventName);
++        wrapper.simulateContent = (eventName: string, ...args) => {
++            wrapper!.findClass(""test-content"").simulate(eventName, ...args);
++            return wrapper!;
++        };
++        wrapper.simulateTarget = (eventName: string, ...args) => {
++            wrapper!.findClass(Classes.POPOVER2_TARGET).simulate(eventName, ...args);
+             return wrapper!;
+         };
+         wrapper.sendEscapeKey = () => {
+@@ -876,7 +927,7 @@ describe(""<Popover2>"", () => {
+                 wrapper!.update();
+                 next(wrapper!);
+                 done();
+-            });
++            }, 40);
+             return wrapper!;
+         };
+         return wrapper;
+","#### Fixes #5775
+
+#### Checklist
+
+- [ ] Includes tests
+- [ ] Update documentation
+
+<!-- DO NOT enable CircleCI for your fork. Our build will run when you open this PR. -->
+
+#### Changes proposed in this pull request:
+
+Adds check in `Popover2` to expect and ignore a simulated click that follows any keyboard click (enter/space) event.
+
+#### Reviewers should focus on:
+
+The root of the bug is caused by the following in single keystroke (up and down) when pressing Enter on a button that is wrapped within a popover:
+
+1. onKeyDown ""Enter"" occurs on AbstractButton, which bubbles to the Popover2. Popover2 [handles this and opens as a result](https://github.com/palantir/blueprint/blob/develop/packages/popover2/src/popover2.tsx#L356-L358).
+2. onKeyUp ""Enter"" occurs on AbstractButton, which it is [programmed to dispatch a click event](https://github.com/palantir/blueprint/blob/develop/packages/core/src/components/button/abstractButton.tsx#L198).
+3. The click event [reaches Popover2](https://github.com/palantir/blueprint/blob/develop/packages/popover2/src/popover2.tsx#L354), which causes it to immediately toggle back to close.
+
+This PR adds code to track when enter/space happens prior to a click event, and then to ignore any subsequent simulated click event (detected via `isTrusted` flag).  If any real click or other keyboard events occur, the tracking property is reset.","<!-- IF YOU ARE A PALANTIR EMPLOYEE, DO NOT POST INTERNAL LINKS OR REFERENCES HERE -->
+
+#### Environment
+
+- __Package version(s)__: 4.12.0
+- __Operating System__: OSX
+- __Browser name and version__: Chrome 107.0.5304.121
+
+#### Code Sandbox
+
+Link to a minimal repro (fork [this code sandbox](https://codesandbox.io/s/blueprint-sandbox-et9xy)): https://blueprintjs.com/docs/#select/select2
+
+#### Steps to reproduce
+
+1. Get focus on the select in the docs page
+2. Press space or enter
+
+#### Actual behavior
+
+Popover opens and closes instantly.
+
+#### Expected behavior
+
+Popover stays open.
+
+#### Possible solution
+
+Probably combination of a key listener and the DOMs general handling of space/enter on buttons, since `ArrowDown` seems to work fine.
+"
+https://github.com/palantir/blueprint/pull/6046,https://github.com/palantir/blueprint/issues/6057,486fbe219eda889b2addb6378d65137ff12b578a,acd8de1a5328d2e3c0b45d4dd947fcc8d81a0db0,2023-03-28T09:31:27Z,"diff --git a/packages/core/src/components/dialog/dialogStep.tsx b/packages/core/src/components/dialog/dialogStep.tsx
+index 20963e2e79..ee185aeb7e 100644
+--- a/packages/core/src/components/dialog/dialogStep.tsx
++++ b/packages/core/src/components/dialog/dialogStep.tsx
+@@ -71,8 +71,8 @@ export class DialogStep extends AbstractPureComponent2<DialogStepProps> {
+     public render() {
+         const { className } = this.props;
+         return (
+-            <div className={Classes.DIALOG_STEP_CONTAINER}>
+-                <div className={classNames(Classes.DIALOG_STEP, className)} role=""dialogsteplist"" />
++            <div className={Classes.DIALOG_STEP_CONTAINER} role=""tab"">
++                <div className={classNames(Classes.DIALOG_STEP, className)} />
+             </div>
+         );
+     }
+
+
+diff --git a/packages/core/src/components/dialog/multistepDialog.tsx b/packages/core/src/components/dialog/multistepDialog.tsx
+index cbd960f7df..c2b0fc7386 100644
+--- a/packages/core/src/components/dialog/multistepDialog.tsx
++++ b/packages/core/src/components/dialog/multistepDialog.tsx
+@@ -19,6 +19,7 @@ import * as React from ""react"";
+ 
+ import { AbstractPureComponent2, Classes, Position, Utils } from ""../../common"";
+ import { DISPLAYNAME_PREFIX } from ""../../common/props"";
++import { clickElementOnKeyPress } from ""../../common/utils"";
+ import { Dialog, DialogProps } from ""./dialog"";
+ import { DialogFooter } from ""./dialogFooter"";
+ import { DialogStep, DialogStepId, DialogStepProps } from ""./dialogStep"";
+@@ -163,7 +164,7 @@ export class MultistepDialog extends AbstractPureComponent2<MultistepDialogProps
+ 
+     private renderLeftPanel() {
+         return (
+-            <div className={Classes.MULTISTEP_DIALOG_LEFT_PANEL}>
++            <div className={Classes.MULTISTEP_DIALOG_LEFT_PANEL} role=""tablist"" aria-label=""steps"">
+                 {this.getDialogStepChildren().filter(isDialogStepElement).map(this.renderDialogStep)}
+             </div>
+         );
+@@ -173,6 +174,8 @@ export class MultistepDialog extends AbstractPureComponent2<MultistepDialogProps
+         const stepNumber = index + 1;
+         const hasBeenViewed = this.state.lastViewedIndex >= index;
+         const currentlySelected = this.state.selectedIndex === index;
++        const handleClickDialogStep =
++            index > this.state.lastViewedIndex ? undefined : this.getDialogStepChangeHandler(index);
+         return (
+             <div
+                 className={classNames(Classes.DIALOG_STEP_CONTAINER, {
+@@ -180,8 +183,16 @@ export class MultistepDialog extends AbstractPureComponent2<MultistepDialogProps
+                     [Classes.DIALOG_STEP_VIEWED]: hasBeenViewed,
+                 })}
+                 key={index}
++                aria-selected={currentlySelected}
++                role=""tab""
+             >
+-                <div className={Classes.DIALOG_STEP} onClick={this.handleClickDialogStep(index)}>
++                <div
++                    className={Classes.DIALOG_STEP}
++                    onClick={handleClickDialogStep}
++                    tabIndex={handleClickDialogStep ? 0 : -1}
++                    // enable enter key to take effect on the div as if it were a button
++                    onKeyDown={clickElementOnKeyPress([""Enter"", "" ""])}
++                >
+                     <div className={Classes.DIALOG_STEP_ICON}>{stepNumber}</div>
+                     <div className={Classes.DIALOG_STEP_TITLE}>{step.props.title}</div>
+                 </div>
+@@ -189,13 +200,6 @@ export class MultistepDialog extends AbstractPureComponent2<MultistepDialogProps
+         );
+     };
+ 
+-    private handleClickDialogStep = (index: number) => {
+-        if (index > this.state.lastViewedIndex) {
+-            return;
+-        }
+-        return this.getDialogStepChangeHandler(index);
+-    };
+-
+     private maybeRenderRightPanel() {
+         const steps = this.getDialogStepChildren();
+         if (steps.length <= this.state.selectedIndex) {
+","diff --git a/packages/core/test/multistep-dialog/multistepDialogTests.tsx b/packages/core/test/multistep-dialog/multistepDialogTests.tsx
+index 87163ddd37..47b717ed22 100644
+--- a/packages/core/test/multistep-dialog/multistepDialogTests.tsx
++++ b/packages/core/test/multistep-dialog/multistepDialogTests.tsx
+@@ -18,6 +18,8 @@ import { assert } from ""chai"";
+ import { mount, ReactWrapper } from ""enzyme"";
+ import * as React from ""react"";
+ 
++import { dispatchTestKeyboardEvent } from ""@blueprintjs/test-commons"";
++
+ import { AnchorButton, Classes, DialogStep, MultistepDialog } from ""../../src"";
+ 
+ // TODO: button selectors in these tests should not be tied so closely to implementation; we shouldn't
+@@ -163,6 +165,27 @@ describe(""<MultistepDialog>"", () => {
+         dialog.unmount();
+     });
+ 
++    it(""pressing enter on older step takes effect"", () => {
++        const testsContainerElement = document.createElement(""div"");
++        document.documentElement.appendChild(testsContainerElement);
++        const dialog = mount(
++            <MultistepDialog isOpen={true} usePortal={false}>
++                <DialogStep id=""one"" title=""Step 1"" panel={<Panel />} />
++                <DialogStep id=""two"" title=""Step 2"" panel={<Panel />} />
++            </MultistepDialog>,
++            { attachTo: testsContainerElement },
++        );
++        assert.strictEqual(dialog.state(""selectedIndex""), 0);
++        findButtonWithText(dialog, ""Next"").simulate(""click"");
++        assert.strictEqual(dialog.state(""selectedIndex""), 1);
++        const step = dialog.find(`.${Classes.DIALOG_STEP}`);
++        step.at(0).simulate(""focus"");
++        dispatchTestKeyboardEvent(step.at(0).getDOMNode(), ""keydown"", ""Enter"");
++        assert.strictEqual(dialog.state(""selectedIndex""), 0);
++        dialog.unmount();
++        testsContainerElement.remove();
++    });
++
+     it(""gets by without children"", () => {
+         assert.doesNotThrow(() => {
+             const dialog = mount(<MultistepDialog isOpen={true} />);
+
+
+diff --git a/packages/test-commons/src/utils.ts b/packages/test-commons/src/utils.ts
+index 87d03f3c6d..b65b9f0d3f 100644
+--- a/packages/test-commons/src/utils.ts
++++ b/packages/test-commons/src/utils.ts
+@@ -40,9 +40,16 @@ export function dispatchTestKeyboardEventWithCode(
+     keyCode: number,
+     shift = false,
+ ) {
+-    const event = document.createEvent(""KeyboardEvent"");
+-    (event as any).initKeyboardEvent(eventType, true, true, window, key, 0, false, false, shift);
+-
++    const event = new KeyboardEvent(eventType, {
++        altKey: false,
++        bubbles: true,
++        cancelable: true,
++        ctrlKey: false,
++        key,
++        location: 0,
++        shiftKey: shift,
++        view: window,
++    });
+     // Hack around these readonly properties in WebKit and Chrome
+     if (detectBrowser() === Browser.WEBKIT) {
+         (event as any).key = key;
+","#### Fixes #6057
+
+#### Checklist
+
+- [X] Includes tests
+- [N/A] Update documentation
+
+<!-- DO NOT enable CircleCI for your fork. Our build will run when you open this PR. -->
+
+#### Changes proposed in this pull request:
+
+MultistepDialog:
+- fix steps tabIndex
+- allow Enter keypress to take effect on step when it is focused
+- improve accessibility by improving roles to `tablist`","<!-- IF YOU ARE A PALANTIR EMPLOYEE, DO NOT POST INTERNAL LINKS OR REFERENCES HERE -->
+
+#### Environment
+
+- __Package version(s)__: Latest
+- __Operating System__: Windows
+- __Browser name and version__: Chrome
+
+
+#### Steps to reproduce
+
+1. Go to a multistep dialog step greater than 1 (ie at https://blueprintjs.com/docs/#core/components/dialog.multistep-dialog, then go to step 2)
+2. Cannot tab to a previous step, but can click it to take effect
+
+#### Actual behavior
+
+Cannot tab to the step to go back.
+
+#### Expected behavior
+
+Can tab to step to go back, and hit enter to take effect
+
+#### Possible solution
+
+Set `tabIndex={0}` to the `div` that has the `onClick` for changing the dialog step so it can be tabbed to. May also need to add `onKeyDown` for `enter` keypress to take effect.
+"
+https://github.com/palantir/blueprint/pull/5235,https://github.com/palantir/blueprint/issues/5229,bef6c02626e03b2a6814f958e38d725338827dd9,cd37cfd5fc84a6a15f3f7987f246c626771f5fcf,2022-04-05T21:51:26Z,"diff --git a/packages/core/src/accessibility/_focus-states.scss b/packages/core/src/accessibility/_focus-states.scss
+index 666ad5466d..e9383ab3a6 100644
+--- a/packages/core/src/accessibility/_focus-states.scss
++++ b/packages/core/src/accessibility/_focus-states.scss
+@@ -5,8 +5,8 @@
+   @include focus-outline();
+ }
+ 
+-// override any focus outline anywhere
+-.#{$ns}-focus-disabled :focus {
++// override any focus outline anywhere unless specifically ignored
++.#{$ns}-focus-disabled :focus:not(.#{$ns}-focus-style-manager-ignore *) {
+   /* stylelint-disable declaration-no-important */
+   outline: none !important;
+ 
+
+
+diff --git a/packages/core/src/common/classes.ts b/packages/core/src/common/classes.ts
+index 145a8576b1..8f144eec96 100644
+--- a/packages/core/src/common/classes.ts
++++ b/packages/core/src/common/classes.ts
+@@ -61,6 +61,7 @@ export const INTENT_WARNING = intentClass(Intent.WARNING)!;
+ export const INTENT_DANGER = intentClass(Intent.DANGER)!;
+ 
+ export const FOCUS_DISABLED = `${NS}-focus-disabled`;
++export const FOCUS_STYLE_MANAGER_IGNORE = `${NS}-focus-style-manager-ignore`;
+ 
+ // text utilities
+ export const UI_TEXT = `${NS}-ui-text`;
+
+
+diff --git a/packages/core/src/docs/accessibility.md b/packages/core/src/docs/accessibility.md
+index 6ebfc645d9..e6e55fd79e 100644
+--- a/packages/core/src/docs/accessibility.md
++++ b/packages/core/src/docs/accessibility.md
+@@ -37,6 +37,25 @@ __@blueprintjs/core__ package. It supports the following public methods:
+ - `FocusStyleManager.onlyShowFocusOnTabs(): void`: Enable behavior which hides focus styles during mouse interaction.
+ - `FocusStyleManager.alwaysShowFocus(): void`: Stop this behavior (focus styles are always visible).
+ 
++@### Selectively ignoring the focus style manager
++
++There is an escape hatch to allow components to ignore the focus style manager. This
++can be useful when you do want to always show the focus outline, but only for certain
++components, like a tree. This is done by applying `Classes.FOCUS_STYLE_MANAGER_IGNORE`
++to a container element.
++
++```tsx
++import { Classes } from ""@blueprintjs/core"";
++
++
++const MyComponent = () => ({
++    <div classname={Classes.FOCUS_STYLE_MANAGER_IGNORE}>
++        // Any components here will always show the focus outline when clicked.
++    </div>
++})
++```
++
++
+ @## Color contrast
+ 
+ Colors have been designed to be accessible to as many people as possible, even those who are
+",,"#### Fixes #5229
+
+#### Checklist
+
+- [ ] Includes tests
+- [x] Update documentation
+
+Not sure how to do tests for css.
+
+<!-- DO NOT enable CircleCI for your fork. Our build will run when you open this PR. -->
+
+#### Changes proposed in this pull request:
+
+This adds a new `Classes.FOCUS_MANAGER_IGNORE` for allowing individual components to chose to ignore the focus manager and always show the focus outline, even when clicked.
+
+
+#### Reviewers should focus on:
+
+<!-- Fill this out. -->
+
+#### Screenshot
+
+<!-- Include an image of the most relevant user-facing change, if any. -->
+","<!-- IF YOU ARE A PALANTIR EMPLOYEE, DO NOT POST INTERNAL LINKS OR REFERENCES HERE -->
+
+#### Environment
+
+- __Package version(s)__: @blueprintjs/core 4.0.4
+- __Operating System__: Ubuntu 20.04
+- __Browser name and version__: Firefox 98, Chromium 100
+
+#### Code Sandbox
+
+https://codesandbox.io/s/blueprint-sandbox-forked-4x77pn?file=/src/index.tsx
+
+#### Steps to reproduce
+
+1. Click on the *Always focus* button 
+   - note the focus outline on this button - this is expected 
+   - note the state text - this is expected
+1. Click on the *Focus on tabs only* button -
+   - note the focus outline on this button - this is _not_ expected
+   - note the state text - this _is_ expected and tell us that `FocusStyleManager.onlyShowFocusOnTabs()` was called
+1. Click on the *Focus on tabs only* button 
+   - note the focus outline is gone - this should have happened on the previous click, not this one
+
+#### Actual behavior
+
+The style change is not applied until the click after `FocusStyleManager.onlyShowFocusOnTabs()` is called.
+
+#### Expected behavior
+
+The style change should be applied immediately when `FocusStyleManager.onlyShowFocusOnTabs()` is called.
+
+#### Possible solution
+
+I think a `mousedown` event is already queued when `FocusStyleManager.onlyShowFocusOnTabs()` is called so it immediately fires and applies the style change again. We could add an `if (this.isRunning)` in the `mousedown` handler to make sure it doesn't do this if the style manager has been disabled in the meantime.
+"
+https://github.com/palantir/blueprint/pull/4900,https://github.com/palantir/blueprint/issues/4813,88a158b38a96350109650a7fe821a5091a25b3ed,34599aedb4a80c71a3ecf9b04fd918fb84d5aacf,2021-09-14T00:18:39Z,"diff --git a/packages/core/src/components/overlay/overlay.tsx b/packages/core/src/components/overlay/overlay.tsx
+index 73a843cb09..f07e8bce36 100644
+--- a/packages/core/src/components/overlay/overlay.tsx
++++ b/packages/core/src/components/overlay/overlay.tsx
+@@ -265,6 +265,7 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+         const transitionGroup = (
+             <TransitionGroup
+                 appear={true}
++                aria-live=""polite""
+                 className={containerClasses}
+                 component=""div""
+                 onKeyDown={this.handleKeyDown}
+","diff --git a/packages/core/test/overlay/overlayTests.tsx b/packages/core/test/overlay/overlayTests.tsx
+index bea56bd4f6..00efa285e9 100644
+--- a/packages/core/test/overlay/overlayTests.tsx
++++ b/packages/core/test/overlay/overlayTests.tsx
+@@ -84,6 +84,16 @@ describe(""<Overlay>"", () => {
+         document.body.removeChild(container);
+     });
+ 
++    it(""sets aria-live"", () => {
++        // Using an open Overlay because an initially closed Overlay will not render anything to the
++        // DOM
++        mountWrapper(<Overlay className=""aria-test"" isOpen={true} usePortal={false} />);
++        const overlayElement = document.querySelector("".aria-test"");
++        assert.exists(overlayElement);
++        // Element#ariaLive not supported in Firefox or IE
++        assert.equal(overlayElement?.getAttribute(""aria-live""), ""polite"");
++    });
++
+     it(""portalClassName appears on Portal"", () => {
+         const CLASS_TO_TEST = ""bp-test-content"";
+         mountWrapper(
+","#### Fixes https://github.com/palantir/blueprint/issues/4813
+
+#### Checklist
+
+- [x] Includes tests
+- [x] Update documentation (n/a)
+
+#### Changes proposed in this pull request:
+
+Set aria-live on Overlay
+
+This allows screen readers to read content in Tooltips, Popovers,
+Dialogs, and Overlays when they are opened.
+
+Not using aria-describedby because the Overlay content is typically
+added to the DOM after interaction with some other element, leaving
+screen readers unable to consistently see the content in time. Setting
+aria-live on the Overlay works because it remains mounted after the
+initial open. VoiceOver is also able to read the content on initial
+open (did not test with other screen readers).
+
+#### Reviewers should focus on:
+
+This behavior change is not limited to Tooltips/Tooltips2 but affects all consumers of the Overlay component. When using a screen reader, Overlay contents will be read on open. I _think_ this is desirable, because otherwise non-keyboard-focusable elements in Overlay contents, namely large blocks of text, will not get read.
+
+#### Screenshot
+
+__Initial attempt with `aria-describedby` and setting content `id` results in inconsistent reading of tooltip__
+
+First focus over ""Or, hover of this whole line"" does not read the tooltip, but a second focus does.
+
+![2021-09-13 17 15 56](https://user-images.githubusercontent.com/3681045/133172779-891e1c7a-9025-454c-b5b3-788c1f3569c1.gif)
+
+
+__(In this PR) Using `aria-live=""polite""`__
+
+Works consistently with or without portals. The tooltips on the last line have `usePortal` set to `false`.
+
+In Chrome:
+![2021-09-13 19 03 41](https://user-images.githubusercontent.com/3681045/133172965-f5dfd592-938b-4c62-b46c-ef84737050bc.gif)
+
+In FF:
+![2021-09-13 20 13 04](https://user-images.githubusercontent.com/3681045/133173232-e4d7fefb-f921-4f8f-ba64-0c2a01fa10c0.gif)
+","<!-- IF YOU ARE A PALANTIR EMPLOYEE, DO NOT POST INTERNAL LINKS OR REFERENCES HERE -->
+
+#### Environment
+
+- __Package version(s)__: core 3.47.0, popover2 0.11.1
+- __Operating System__: macOS
+- __Browser name and version__: Chrome
+
+#### Accessibility feature request
+
+Blueprint tooltips should better communicate information to assistive technologies.
+
+It should be relatively low-lift to add a feature to the Tooltip and/or Tooltip2 component which renders an `aria-describedby` attribute and generates a corresponding unique ID string for the tooltip contents to the DOM.
+
+See:
+
+- https://medium.com/accessibility-a11y/best-practices-on-aria-label-aria-labelledby-and-aria-describedby-913fc9e396ae
+- https://sarahmhigley.com/writing/tooltips-in-wcag-21/"
+https://github.com/palantir/blueprint/pull/4894,https://github.com/palantir/blueprint/issues/3445,88a158b38a96350109650a7fe821a5091a25b3ed,9a4debd5502ddd58ce1cf266eac9fbb726500e0b,2021-09-09T20:28:12Z,"diff --git a/packages/core/src/components/overlay/overlay.tsx b/packages/core/src/components/overlay/overlay.tsx
+index 73a843cb09..e3efe7fd72 100644
+--- a/packages/core/src/components/overlay/overlay.tsx
++++ b/packages/core/src/components/overlay/overlay.tsx
+@@ -229,10 +229,24 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+     // an HTMLElement that contains the backdrop and any children, to query for focus target
+     public containerElement: HTMLElement | null = null;
+ 
++    // An empty, keyboard-focusable div at the beginning of the Overlay content
++    private startFocusTrapElement: HTMLDivElement | null = null;
++
++    // An empty, keyboard-focusable div at the end of the Overlay content
++    private endFocusTrapElement: HTMLDivElement | null = null;
++
+     private refHandlers = {
+         // HACKHACK: see https://github.com/palantir/blueprint/issues/3979
+         /* eslint-disable-next-line react/no-find-dom-node */
+         container: (ref: TransitionGroup) => (this.containerElement = findDOMNode(ref) as HTMLElement),
++        firstFocusable: (ref: HTMLDivElement | null) => {
++            this.startFocusTrapElement = ref;
++            ref?.addEventListener(""focusin"", this.handleStartFocusTrapElementFocusIn);
++        },
++        lastFocusable: (ref: HTMLDivElement | null) => {
++            this.endFocusTrapElement = ref;
++            ref?.addEventListener(""focusin"", this.handleEndFocusTrapElementFocusIn);
++        },
+     };
+ 
+     public render() {
+@@ -241,7 +255,7 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+             return null;
+         }
+ 
+-        const { children, className, usePortal, isOpen } = this.props;
++        const { children, className, enforceFocus, usePortal, isOpen } = this.props;
+ 
+         // TransitionGroup types require single array of children; does not support nested arrays.
+         // So we must collapse backdrop and children into one array, and every item must be wrapped in a
+@@ -252,6 +266,10 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+         if (maybeBackdrop !== null) {
+             childrenWithTransitions.unshift(maybeBackdrop);
+         }
++        if (isOpen && enforceFocus && childrenWithTransitions.length > 0) {
++            childrenWithTransitions.unshift(this.renderDummyElement(this.refHandlers.firstFocusable, ""__first""));
++            childrenWithTransitions.push(this.renderDummyElement(this.refHandlers.lastFocusable, ""__last""));
++        }
+ 
+         const containerClasses = classNames(
+             Classes.OVERLAY,
+@@ -319,11 +337,13 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+             if (isFocusOutsideModal) {
+                 // element marked autofocus has higher priority than the other clowns
+                 const autofocusElement = this.containerElement.querySelector(""[autofocus]"") as HTMLElement;
+-                const wrapperElement = this.containerElement.querySelector(""[tabindex]"") as HTMLElement;
++                const firstKeyboardFocusableElement = this.getKeyboardFocusableElements().shift();
+                 if (autofocusElement != null) {
+                     autofocusElement.focus();
+-                } else if (wrapperElement != null) {
+-                    wrapperElement.focus();
++                } else if (firstKeyboardFocusableElement != null) {
++                    firstKeyboardFocusableElement.focus();
++                } else {
++                    this.startFocusTrapElement?.focus();
+                 }
+             }
+         });
+@@ -395,7 +415,6 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+                         {...backdropProps}
+                         className={classNames(Classes.OVERLAY_BACKDROP, backdropClassName, backdropProps?.className)}
+                         onMouseDown={this.handleBackdropMouseDown}
+-                        tabIndex={this.props.canOutsideClickClose ? 0 : undefined}
+                     />
+                 </CSSTransition>
+             );
+@@ -404,9 +423,94 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+         }
+     }
+ 
++    private renderDummyElement(ref: (element: HTMLDivElement) => void, key: string) {
++        const { transitionDuration, transitionName } = this.props;
++        return (
++            <CSSTransition
++                classNames={transitionName}
++                key={key}
++                addEndListener={this.handleTransitionAddEnd}
++                timeout={transitionDuration}
++                unmountOnExit={true}
++            >
++                <div ref={ref} tabIndex={0} />
++            </CSSTransition>
++        );
++    }
++
++    /**
++     * Ensures repeatedly pressing shift+tab keeps focus inside the Overlay. Moves focus to
++     * the `endFocusTrapElement` or the first keyboard-focusable element in the Overlay (excluding
++     * the `startFocusTrapElement`), depending on whether the element losing focus is inside the
++     * Overlay.
++     */
++    private handleStartFocusTrapElementFocusIn = (e: FocusEvent) => {
++        e.preventDefault();
++        e.stopImmediatePropagation();
++        if (
++            e.relatedTarget != null &&
++            this.containerElement!.contains(e.relatedTarget as Element) &&
++            e.relatedTarget !== this.endFocusTrapElement
++        ) {
++            this.endFocusTrapElement?.focus();
++        } else {
++            this.getKeyboardFocusableElements().shift()?.focus();
++        }
++    };
++
++    /**
++     * Ensures repeatedly pressing tab keeps focus inside the Overlay. Moves focus to the
++     * `startFocusTrapElement` or the last keyboard-focusable element in the Overlay (excluding the
++     * `startFocusTrapElement`), depending on whether the element losing focus is inside the
++     * Overlay.
++     */
++    private handleEndFocusTrapElementFocusIn = (e: FocusEvent) => {
++        e.preventDefault();
++        e.stopImmediatePropagation();
++        if (
++            e.relatedTarget != null &&
++            this.containerElement!.contains(e.relatedTarget as Element) &&
++            e.relatedTarget !== this.startFocusTrapElement
++        ) {
++            this.startFocusTrapElement?.focus();
++        } else {
++            this.getKeyboardFocusableElements().pop()?.focus();
++        }
++    };
++
++    private getKeyboardFocusableElements() {
++        const focusableElements: HTMLElement[] =
++            this.containerElement !== null
++                ? Array.from(
++                      // Order may not be correct if children elements use tabindex values > 0.
++                      // Selectors derived from this SO question:
++                      // https://stackoverflow.com/questions/1599660/which-html-elements-can-receive-focus
++                      this.containerElement.querySelectorAll(
++                          [
++                              'a[href]:not([tabindex=""-1""])',
++                              'button:not([disabled]):not([tabindex=""-1""])',
++                              'details:not([tabindex=""-1""])',
++                              'input:not([disabled]):not([tabindex=""-1""])',
++                              'select:not([disabled]):not([tabindex=""-1""])',
++                              'textarea:not([disabled]):not([tabindex=""-1""])',
++                              '[tabindex]:not([tabindex=""-1""])',
++                          ].join("",""),
++                      ),
++                  )
++                : [];
++        if (this.props.enforceFocus) {
++            // The first and last elements are dummy elements that help trap focus when enforceFocus
++            // is enabled
++            focusableElements.shift();
++            focusableElements.pop();
++        }
++        return focusableElements;
++    }
++
+     private overlayWillClose() {
+-        document.removeEventListener(""focus"", this.handleDocumentFocus, /* useCapture */ true);
+         document.removeEventListener(""mousedown"", this.handleDocumentClick);
++        this.startFocusTrapElement?.removeEventListener(""focusin"", this.handleStartFocusTrapElementFocusIn);
++        this.endFocusTrapElement?.removeEventListener(""focusin"", this.handleEndFocusTrapElementFocusIn);
+ 
+         const { openStack } = Overlay;
+         const stackIndex = openStack.indexOf(this);
+@@ -415,7 +519,7 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+             if (openStack.length > 0) {
+                 const lastOpenedOverlay = Overlay.getLastOpened();
+                 if (lastOpenedOverlay.props.enforceFocus) {
+-                    document.addEventListener(""focus"", lastOpenedOverlay.handleDocumentFocus, /* useCapture */ true);
++                    lastOpenedOverlay.bringFocusInsideOverlay();
+                 }
+             }
+ 
+@@ -426,20 +530,13 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+     }
+ 
+     private overlayWillOpen() {
+-        const { openStack } = Overlay;
+-        if (openStack.length > 0) {
+-            document.removeEventListener(""focus"", Overlay.getLastOpened().handleDocumentFocus, /* useCapture */ true);
+-        }
+-        openStack.push(this);
++        Overlay.openStack.push(this);
+ 
+         if (this.props.autoFocus) {
+             this.bringFocusInsideOverlay();
+         }
+-        if (this.props.enforceFocus) {
+-            document.addEventListener(""focus"", this.handleDocumentFocus, /* useCapture */ true);
+-        }
+ 
+-        if (this.props.canOutsideClickClose && !this.props.hasBackdrop) {
++        if (this.props.canOutsideClickClose || this.props.enforceFocus) {
+             document.addEventListener(""mousedown"", this.handleDocumentClick);
+         }
+ 
+@@ -455,15 +552,14 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+             onClose?.(e);
+         }
+         if (enforceFocus) {
+-            // make sure document.activeElement is updated before bringing the focus back
+             this.bringFocusInsideOverlay();
+         }
+         backdropProps?.onMouseDown?.(e);
+     };
+ 
+     private handleDocumentClick = (e: MouseEvent) => {
+-        const { canOutsideClickClose, isOpen, onClose } = this.props;
+-        // get the actually target even if we are in an open mode Shadow DOM
++        const { canOutsideClickClose, enforceFocus, isOpen, onClose } = this.props;
++        // get the actual target even if we are in an open mode Shadow DOM
+         const eventTarget = (e.composed ? e.composedPath()[0] : e.target) as HTMLElement;
+ 
+         const stackIndex = Overlay.openStack.indexOf(this);
+@@ -475,25 +571,14 @@ export class Overlay extends AbstractPureComponent2<OverlayProps, IOverlayState>
+                 return elem && elem.contains(eventTarget) && !elem.isSameNode(eventTarget);
+             });
+ 
+-        if (isOpen && canOutsideClickClose && !isClickInThisOverlayOrDescendant) {
+-            // casting to any because this is a native event
+-            onClose?.(e as any);
+-        }
+-    };
+-
+-    private handleDocumentFocus = (e: FocusEvent) => {
+-        // get the actually target even if we are in an open mode Shadow DOM
+-        const eventTarget = e.composed ? e.composedPath()[0] : e.target;
+-        if (
+-            this.props.enforceFocus &&
+-            this.containerElement != null &&
+-            eventTarget instanceof Node &&
+-            !this.containerElement.contains(eventTarget as HTMLElement)
+-        ) {
+-            // prevent default focus behavior (sometimes auto-scrolls the page)
+-            e.preventDefault();
+-            e.stopImmediatePropagation();
+-            this.bringFocusInsideOverlay();
++        if (isOpen && !isClickInThisOverlayOrDescendant) {
++            if (canOutsideClickClose) {
++                // casting to any because this is a native event
++                onClose?.(e as any);
++            }
++            if (enforceFocus) {
++                this.bringFocusInsideOverlay();
++            }
+         }
+     };
+ 
+","diff --git a/packages/core/test/multistep-dialog/multistepDialogTests.tsx b/packages/core/test/multistep-dialog/multistepDialogTests.tsx
+index fdf0e688d5..b0db0b11e9 100644
+--- a/packages/core/test/multistep-dialog/multistepDialogTests.tsx
++++ b/packages/core/test/multistep-dialog/multistepDialogTests.tsx
+@@ -163,20 +163,24 @@ describe(""<MultistepDialog>"", () => {
+     });
+ 
+     it(""gets by without children"", () => {
+-        assert.doesNotThrow(() => mount(<MultistepDialog isOpen={true} />));
++        assert.doesNotThrow(() => {
++            const dialog = mount(<MultistepDialog isOpen={true} />);
++            dialog.unmount();
++        });
+     });
+ 
+     it(""supports non-existent children"", () => {
+-        assert.doesNotThrow(() =>
+-            mount(
++        assert.doesNotThrow(() => {
++            const dialog = mount(
+                 <MultistepDialog>
+                     {null}
+                     <DialogStep id=""one"" panel={<Panel />} />
+                     {undefined}
+                     <DialogStep id=""two"" panel={<Panel />} />
+                 </MultistepDialog>,
+-            ),
+-        );
++            );
++            dialog.unmount();
++        });
+     });
+ 
+     it(""enables next by default"", () => {
+
+
+diff --git a/packages/core/test/overlay/overlayTests.tsx b/packages/core/test/overlay/overlayTests.tsx
+index bea56bd4f6..58fad906ca 100644
+--- a/packages/core/test/overlay/overlayTests.tsx
++++ b/packages/core/test/overlay/overlayTests.tsx
+@@ -60,6 +60,10 @@ describe(""<Overlay>"", () => {
+         }
+     });
+ 
++    after(() => {
++        document.documentElement.removeChild(testsContainerElement);
++    });
++
+     it(""renders its content correctly"", () => {
+         const overlay = shallow(
+             <Overlay isOpen={true} usePortal={false}>
+@@ -247,16 +251,16 @@ describe(""<Overlay>"", () => {
+                 </Overlay>,
+             );
+             assertFocus(() => {
+-                const backdrops = Array.from(document.querySelectorAll(""."" + Classes.OVERLAY_BACKDROP));
+-                assert.include(backdrops, document.activeElement);
++                const contents = Array.from(document.querySelectorAll(""."" + Classes.OVERLAY_CONTENT));
++                assert.include(contents, document.activeElement);
+             }, done);
+         });
+ 
+-        it(""does not bring focus to overlay if autoFocus=false"", done => {
++        it(""does not bring focus to overlay if autoFocus=false and enforceFocus=false"", done => {
+             mountWrapper(
+                 <div>
+                     <button>something outside overlay for browser to focus on</button>
+-                    <Overlay autoFocus={false} isOpen={true} usePortal={true}>
++                    <Overlay autoFocus={false} enforceFocus={false} isOpen={true} usePortal={true}>
+                         <input type=""text"" />
+                     </Overlay>
+                 </div>,
+@@ -290,10 +294,7 @@ describe(""<Overlay>"", () => {
+             buttonRef!.focus();
+             assertFocus(() => {
+                 assert.notStrictEqual(document.activeElement, buttonRef);
+-                assert.isTrue(
+-                    document.activeElement?.classList.contains(Classes.OVERLAY_BACKDROP),
+-                    ""focus on backdrop"",
+-                );
++                assert.isTrue(document.activeElement?.classList.contains(Classes.OVERLAY_CONTENT), ""focus on content"");
+             }, done);
+         });
+ 
+@@ -307,6 +308,25 @@ describe(""<Overlay>"", () => {
+             assertFocus(`strong.${Classes.OVERLAY_CONTENT}`, done);
+         });
+ 
++        it(""returns focus to overlay after clicking an outside element if enforceFocus=true"", done => {
++            mountWrapper(
++                <div>
++                    <Overlay
++                        enforceFocus={true}
++                        canOutsideClickClose={false}
++                        isOpen={true}
++                        usePortal={false}
++                        hasBackdrop={false}
++                    >
++                        {createOverlayContents()}
++                    </Overlay>
++                    <button id=""buttonId"" />
++                </div>,
++            );
++            wrapper.find(""#buttonId"").simulate(""click"");
++            assertFocus(`strong.${Classes.OVERLAY_CONTENT}`, done);
++        });
++
+         it(""does not result in maximum call stack if two overlays open with enforceFocus=true"", () => {
+             const anotherContainer = document.createElement(""div"");
+             document.documentElement.appendChild(anotherContainer);
+","#### Fixes https://github.com/palantir/blueprint/issues/3445
+
+#### Checklist
+
+- [x] Includes tests
+- [x] Update documentation (n/a)
+
+<!-- DO NOT enable CircleCI for your fork. Our build will run when you open this PR. -->
+
+#### Changes proposed in this pull request:
+
+When enforceFocus is enabled, surround Overlay content with dummy div
+elements with focus event listeners that keep focus inside the Overlay.
+
+#### Reviewers should focus on:
+
+I want to flag that I've removed the `tabindex` attribute from the backdrop to prevent it from being keyboard focusable.
+
+This change also fixes an issue where multiple open overlays will compete with each for focus. As an example, go to https://blueprintjs.com/docs/#core/components/overlay and open the overlay and then hit shift+s to open the omnibar search (also powered by Overlay). The search input will not get autofocused. Repeat the same workflow on https://46971-71939872-gh.circle-artifacts.com/0/packages/docs-app/dist/index.html#core/components/overlay and note that the omnibar search does get focus correctly.
+
+#### Screenshot
+
+##### Before
+
+When using a portal, the portal is the last element on the page so tabbing will eventually cause focus to leave the document and none of the existing event handlers run before that happens. Note that shift+tabbing is not closing the overlay, the gif is just looping.
+
+![2021-09-09 19 59 13](https://user-images.githubusercontent.com/3681045/132777763-9172c91e-f09b-449a-be2e-b73640513f0b.gif)
+
+##### After
+
+Tab/shift+tab will never allow focus to leave the overlay if `enforceFocus`.
+
+![2021-09-09 19 58 14](https://user-images.githubusercontent.com/3681045/132777789-519292e2-b57b-48b1-8fe1-271101143d2e.gif)","#### Environment
+
+- __Package version(s)__: 13.14.x
+- __Browser and OS versions__: Windows 10, Chrome  73.0.3683.86 (Official Build) (64-bit)
+
+#### Steps to reproduce
+
+I've created both a popover and a dialog with a variety of controls including check boxes and input controls. I set enforceFocus to true, autoFocus to true. Tabbing between items in the dialog  or the popover does not keep the focus within the dialog/popover. 
+
+For the dialog, you can verify this behavior by doing the following:
+1. Go to BluepringJS dialog page - all props are on by default
+2. Click ShowDialog
+3. Tab through all of the controls
+
+#### Actual behavior
+Tabbing past 'Visit the Foundry website' button puts you into the chrome address bar instead of back to the first focus-able item in the dialog.
+
+As an aside, the 'Visit the Foundry website' button has no focus rect (hard to see that it is the focused element)
+
+#### Expected behavior
+Tabbing past the `Visit the Foundry website' button sets focus to the first focus-able item in the dialog or popover."
+https://github.com/palantir/blueprint/pull/4892,https://github.com/palantir/blueprint/issues/4810,76a90a21e1896850101e8de1f09879d296a7cb5f,88a158b38a96350109650a7fe821a5091a25b3ed,2021-09-08T20:04:06Z,"diff --git a/packages/core/src/components/menu/menuItem.tsx b/packages/core/src/components/menu/menuItem.tsx
+index 79bf1174831..f06baacac62 100644
+--- a/packages/core/src/components/menu/menuItem.tsx
++++ b/packages/core/src/components/menu/menuItem.tsx
+@@ -161,6 +161,7 @@ export class MenuItem extends AbstractPureComponent2<MenuItemProps & React.Ancho
+         const target = React.createElement(
+             tagName,
+             {
++                tabIndex: 0,
+                 ...htmlProps,
+                 ...(disabled ? DISABLED_PROPS : {}),
+                 className: anchorClasses,
+",,"#### Fixes #4810
+
+#### Changes proposed in this pull request:
+
+Apply `tabIndex=""0""` to all MenuItems by default, even if they don't have an `href` or `onChange`. The reasoning for this is that we make MenuItems look interactive regardless of whether they are actually hooked up to _do_ something in an application (with `:hover` and `:active` styles), so for accessible consistency we should also make them focusable via the keyboard.
+
+#### Reviewers should focus on:
+
+N/A
+
+#### Screenshot
+
+Before this PR (pressing TAB, TAB, TAB, TAB, SHIFT+TAB, SHIFT+TAB, SHIFT+TAB, SHIFT+TAB):
+
+![2021-09-08 16 01 12](https://user-images.githubusercontent.com/723999/132577436-bafb1ade-1b12-416a-92eb-a9a3c99adc5e.gif)
+
+After this PR (pressing TAB, TAB, TAB, TAB, SHIFT+TAB, SHIFT+TAB, SHIFT+TAB, SHIFT+TAB):
+
+![2021-09-08 16 01 26](https://user-images.githubusercontent.com/723999/132577477-93045ea1-5316-4474-8786-0475ae60952d.gif)
+
+","<!-- IF YOU ARE A PALANTIR EMPLOYEE, DO NOT POST INTERNAL LINKS OR REFERENCES HERE -->
+
+#### Environment
+
+- __Package version(s)__: core 3.47.0
+
+#### Code Sandbox
+
+Link to a minimal repro: https://codesandbox.io/s/blueprint-sandbox-forked-glq4i?file=/src/CoreExample.tsx
+
+#### Steps to reproduce
+
+1. Click inside ""Core sandbox example"" (this step is optional, but gets you quicker to focus on the first menu item)
+1. Press TAB key to focus first menu item
+1. Press TAB key again
+
+#### Actual behavior
+
+Focus goes to third menu item, which has an `href` attribute
+
+#### Expected behavior
+
+Focus goes to second menu item (and focus ring indicator is displayed)
+
+#### Possible solution
+
+We should apply `tabIndex={0}` by default to all MenuItems, even if they don't have an `href` (which would make them focusable by default). The reasoning for this is that we make MenuItems look interactive regardless of whether they are actually hooked up to _do_ something in an application (with `:hover` and `:active` styles), so for accessible consistency we should also make them focusable via the keyboard.
+
+Note that this issue is a subset of https://github.com/palantir/blueprint/issues/3079, but is more narrow and easily actionable.
+"
+https://github.com/palantir/blueprint/pull/4805,https://github.com/palantir/blueprint/issues/4794,dde06f6bb620cdd6bcf68ae2a727aaf5b7589707,561ea3a528e01f2b95056c27f518752f00aa598b,2021-07-09T21:51:39Z,"diff --git a/packages/core/src/components/popover/popover.tsx b/packages/core/src/components/popover/popover.tsx
+index c148b3852c..64f3de8a61 100644
+--- a/packages/core/src/components/popover/popover.tsx
++++ b/packages/core/src/components/popover/popover.tsx
+@@ -365,6 +365,7 @@ export class Popover extends AbstractPureComponent2<IPopoverProps, IPopoverState
+                   // CLICK needs only one handler
+                   onClick: this.handleTargetClick,
+               };
++        finalTargetProps[""aria-haspopup""] = ""true"";
+         finalTargetProps.className = classNames(
+             Classes.POPOVER_TARGET,
+             { [Classes.POPOVER_OPEN]: isOpen },
+
+
+diff --git a/packages/popover2/src/popover2.tsx b/packages/popover2/src/popover2.tsx
+index 814d56b87a..c8f40e58b7 100644
+--- a/packages/popover2/src/popover2.tsx
++++ b/packages/popover2/src/popover2.tsx
+@@ -311,6 +311,7 @@ export class Popover2<T> extends AbstractPureComponent2<Popover2Props<T>, IPopov
+         // Ensure target is focusable if relevant prop enabled
+         const targetTabIndex = openOnTargetFocus && isHoverInteractionKind ? 0 : undefined;
+         const targetProps = {
++            ""aria-haspopup"": ""true"",
+             // N.B. this.props.className is passed along to renderTarget even though the user would have access to it.
+             // If, instead, renderTarget is undefined and the target is provided as a child, this.props.className is
+             // applied to the generated target wrapper element.
+","diff --git a/packages/popover2/test/popover2Tests.tsx b/packages/popover2/test/popover2Tests.tsx
+index c634966e2e..b25e3d0dad 100644
+--- a/packages/popover2/test/popover2Tests.tsx
++++ b/packages/popover2/test/popover2Tests.tsx
+@@ -187,6 +187,11 @@ describe(""<Popover2>"", () => {
+             });
+             assert.isNotNull(popoverElement.matches(`.${CoreClasses.DARK}`));
+         });
++
++        it(""renders with aria-haspopup attr"", () => {
++            wrapper = renderPopover({ isOpen: true });
++            assert.isTrue(wrapper.find(""[aria-haspopup='true']"").exists());
++        });
+     });
+ 
+     describe(""basic functionality"", () => {
+","#### Fixes #4794
+
+#### Checklist
+
+- [x] Includes tests
+- [ ] Update documentation
+
+<!-- DO NOT enable CircleCI for your fork. Our build will run when you open this PR. -->
+
+#### Changes proposed in this pull request:
+
+Add `aria-haspopup=""true""` attribute to the target element rendered by Popover & Popover2 to indicate that it triggers an interactive popup element. I've gone with the generic value of `""true""`; if users wish to customize this they can use the Popover2 renderTarget prop API.
+
+Docs: https://developer.mozilla.org/en-US/docs/Web/API/Element/ariaHasPopup
+
+#### Reviewers should focus on:
+
+Attribute is being added to the right element... it should be the one which has the popover mouse event handlers, I think.
+
+#### Screenshot
+
+<!-- Include an image of the most relevant user-facing change, if any. -->
+","<!-- IF YOU ARE A PALANTIR EMPLOYEE, DO NOT POST INTERNAL LINKS OR REFERENCES HERE -->
+
+In order to ensure that custom controls are keyboard accessible, elements that open menus/content in popovers should communicate that structure. This can be done with `aria-haspopup`: https://developer.mozilla.org/en-US/docs/Web/API/Element/ariaHasPopup
+
+#### Environment
+
+- __Package version(s)__: 3.46.0
+- __Operating System__:  MacOS
+- __Browser name and version__: Chrome
+
+"
+https://github.com/palantir/blueprint/pull/4255,https://github.com/palantir/blueprint/issues/4247,c3fe44db3e5763fa82d5f8e1a74e0e04135a1431,1763384000ca0b694b8051d28cb901ae8608d7a0,2020-07-31T07:06:47Z,"diff --git a/packages/core/src/components/tag/tag.tsx b/packages/core/src/components/tag/tag.tsx
+index 377f7ef220..fe5f536463 100644
+--- a/packages/core/src/components/tag/tag.tsx
++++ b/packages/core/src/components/tag/tag.tsx
+@@ -137,7 +137,12 @@ export class Tag extends AbstractPureComponent2<ITagProps> {
+         );
+         const isLarge = large || tagClasses.indexOf(Classes.LARGE) >= 0;
+         const removeButton = isRemovable ? (
+-            <button type=""button"" className={Classes.TAG_REMOVE} onClick={this.onRemoveClick}>
++            <button
++                type=""button""
++                className={Classes.TAG_REMOVE}
++                onClick={this.onRemoveClick}
++                tabIndex={interactive ? tabIndex : undefined}
++            >
+                 <Icon icon=""small-cross"" iconSize={isLarge ? Icon.SIZE_LARGE : Icon.SIZE_STANDARD} />
+             </button>
+         ) : null;
+",,"multi-select tag remove button now tabs only when tabbing for tag implemented
+
+#### Fixes #4247 
+
+#### Checklist
+
+- [ ] Includes tests
+- [ ] Update documentation
+
+<!-- DO NOT enable CircleCI for your fork. Our build will run when you open this PR. -->
+
+#### Changes proposed in this pull request:
+
+Tabbing of the remove button is aligned with the tag itself.
+
+#### Reviewers should focus on:
+
+Just a quick fix that makes all elements of the tag 'tabbable' or not depending upon whether` interactive = true` and a `tabIndex `has been set.
+
+","Package version(s): any
+Browser and OS versions: any
+
+#### Feature request
+
+Allow users to apply a tabIndex to tags rendered within multi-selects.
+
+#### Examples
+
+![blueprint - multi-select tabbing](https://user-images.githubusercontent.com/42358242/88534474-0fb02180-d000-11ea-910d-2ada27d56b85.gif)
+"
+https://github.com/palantir/blueprint/pull/1729,,39f142f33009910fefe3f8bee5ec52aa09a82f83,761d35f2b50221d0a354f0d00710294e283989c1,2017-10-17T21:32:44Z,"diff --git a/packages/table/src/cell/_cell.scss b/packages/table/src/cell/_cell.scss
+index 5bebb40b8c..cfbf16aa18 100644
+--- a/packages/table/src/cell/_cell.scss
++++ b/packages/table/src/cell/_cell.scss
+@@ -21,6 +21,11 @@
+     @include cell-content-align-vertical();
+     color: transparent;
+   }
++
++  &:focus {
++    // disable focus outline on cells; we already have the focus border
++    outline: none;
++  }
+ }
+ 
+ .bp-table-cell-interactive {
+
+
+diff --git a/packages/table/src/cell/cell.tsx b/packages/table/src/cell/cell.tsx
+index f11cc34fe7..046252a855 100644
+--- a/packages/table/src/cell/cell.tsx
++++ b/packages/table/src/cell/cell.tsx
+@@ -64,6 +64,26 @@ export interface ICellProps extends IIntentProps, IProps {
+      * @default false
+      */
+     wrapText?: boolean;
++
++    /**
++     * Allows for setting a tab index on the cell, so the cell can be browser-focusable.
++     */
++    tabIndex?: number;
++
++    /**
++     * Callback invoked when the cell is focused and a key is pressed down.
++     */
++    onKeyDown?: React.KeyboardEventHandler<HTMLElement>;
++
++    /**
++     * Callback invoked when the cell is focused and a key is released.
++     */
++    onKeyUp?: React.KeyboardEventHandler<HTMLElement>;
++
++    /**
++     * A ref handle to capture the outer div of this cell. Used internally.
++     */
++    cellRef?: (ref: HTMLElement) => void;
+ }
+ 
+ export type ICellRenderer = (rowIndex: number, columnIndex: number) => React.ReactElement<ICellProps>;
+@@ -85,7 +105,20 @@ export class Cell extends React.Component<ICellProps, {}> {
+     }
+ 
+     public render() {
+-        const { style, intent, interactive, loading, tooltip, truncated, className, wrapText } = this.props;
++        const {
++            cellRef,
++            tabIndex,
++            onKeyDown,
++            onKeyUp,
++            style,
++            intent,
++            interactive,
++            loading,
++            tooltip,
++            truncated,
++            className,
++            wrapText,
++        } = this.props;
+ 
+         const classes = classNames(
+             Classes.TABLE_CELL,
+@@ -132,7 +165,7 @@ export class Cell extends React.Component<ICellProps, {}> {
+         const content = <div className={textClasses}>{modifiedChildren}</div>;
+ 
+         return (
+-            <div className={classes} style={style} title={tooltip}>
++            <div className={classes} title={tooltip} ref={cellRef} {...{ style, tabIndex, onKeyDown, onKeyUp }}>
+                 <LoadableContent loading={loading} variableLength={true}>
+                     {content}
+                 </LoadableContent>
+
+
+diff --git a/packages/table/src/cell/editableCell.tsx b/packages/table/src/cell/editableCell.tsx
+index 3f271997f0..957e00162e 100644
+--- a/packages/table/src/cell/editableCell.tsx
++++ b/packages/table/src/cell/editableCell.tsx
+@@ -8,13 +8,18 @@
+ import * as classNames from ""classnames"";
+ import * as React from ""react"";
+ 
+-import { EditableText, Utils as CoreUtils } from ""@blueprintjs/core"";
++import { EditableText, Hotkey, Hotkeys, HotkeysTarget, Utils as CoreUtils } from ""@blueprintjs/core"";
+ 
+ import * as Classes from ""../common/classes"";
+ import { Draggable } from ""../interactions/draggable"";
+ import { Cell, ICellProps } from ""./cell"";
+ 
+ export interface IEditableCellProps extends ICellProps {
++    /**
++     * Whether the given cell is the current active/focused cell.
++     */
++    isFocused?: boolean;
++
+     /**
+      * The value displayed in the text box. Be sure to update this value when
+      * rendering this component after a confirmed change.
+@@ -53,12 +58,20 @@ export interface IEditableCellState {
+     dirtyValue?: string;
+ }
+ 
++@HotkeysTarget
+ export class EditableCell extends React.Component<IEditableCellProps, IEditableCellState> {
+     public static defaultProps = {
+         truncated: true,
+         wrapText: false,
+     };
+ 
++    private cellRef: HTMLElement;
++    private refHandlers = {
++        cell: (ref: HTMLElement) => {
++            this.cellRef = ref;
++        },
++    };
++
+     public constructor(props: IEditableCellProps, context?: any) {
+         super(props, context);
+         this.state = {
+@@ -67,6 +80,14 @@ export class EditableCell extends React.Component<IEditableCellProps, IEditableC
+         };
+     }
+ 
++    public componentDidMount() {
++        this.checkShouldFocus();
++    }
++
++    public componentDidUpdate() {
++        this.checkShouldFocus();
++    }
++
+     public shouldComponentUpdate(nextProps: IEditableCellProps, nextState: IEditableCellState) {
+         return (
+             !CoreUtils.shallowCompareKeys(this.props, nextProps, { exclude: [""style""] }) ||
+@@ -115,7 +136,7 @@ export class EditableCell extends React.Component<IEditableCellProps, IEditableC
+         }
+ 
+         return (
+-            <Cell {...spreadableProps} truncated={false} interactive={interactive}>
++            <Cell {...spreadableProps} truncated={false} interactive={interactive} cellRef={this.refHandlers.cell}>
+                 <Draggable
+                     onActivate={this.handleCellActivate}
+                     onDoubleClick={this.handleCellDoubleClick}
+@@ -128,6 +149,27 @@ export class EditableCell extends React.Component<IEditableCellProps, IEditableC
+         );
+     }
+ 
++    public renderHotkeys() {
++        return (
++            <Hotkeys>
++                <Hotkey
++                    key=""edit-cell""
++                    label=""Edit the currently focused cell""
++                    group=""Table""
++                    combo=""f2""
++                    onKeyDown={this.handleEdit}
++                />
++            </Hotkeys>
++        );
++    }
++
++    private checkShouldFocus() {
++        if (this.props.isFocused && !this.state.isEditing) {
++            // don't focus if we're editing -- we'll lose the fact that we're editing
++            this.cellRef.focus();
++        }
++    }
++
+     private handleEdit = () => {
+         this.setState({ isEditing: true, dirtyValue: this.state.savedValue });
+     };
+
+
+diff --git a/packages/table/src/table.tsx b/packages/table/src/table.tsx
+index 473d3567a5..ba9f6afda3 100644
+--- a/packages/table/src/table.tsx
++++ b/packages/table/src/table.tsx
+@@ -988,6 +988,7 @@ export class Table extends AbstractComponent<ITableProps, ITableState> {
+                     group=""Table""
+                     combo=""tab""
+                     onKeyDown={this.handleFocusMoveRightInternal}
++                    allowInInput={true}
+                 />,
+                 <Hotkey
+                     key=""move shift-tab""
+@@ -995,6 +996,7 @@ export class Table extends AbstractComponent<ITableProps, ITableState> {
+                     group=""Table""
+                     combo=""shift+tab""
+                     onKeyDown={this.handleFocusMoveLeftInternal}
++                    allowInInput={true}
+                 />,
+                 <Hotkey
+                     key=""move enter""
+@@ -1002,6 +1004,7 @@ export class Table extends AbstractComponent<ITableProps, ITableState> {
+                     group=""Table""
+                     combo=""enter""
+                     onKeyDown={this.handleFocusMoveDownInternal}
++                    allowInInput={true}
+                 />,
+                 <Hotkey
+                     key=""move shift-enter""
+@@ -1009,6 +1012,7 @@ export class Table extends AbstractComponent<ITableProps, ITableState> {
+                     group=""Table""
+                     combo=""shift+enter""
+                     onKeyDown={this.handleFocusMoveUpInternal}
++                    allowInInput={true}
+                 />,
+             ];
+         } else {
+
+
+diff --git a/packages/table/src/tableBody.tsx b/packages/table/src/tableBody.tsx
+index 4be354b92c..163fac2487 100644
+--- a/packages/table/src/tableBody.tsx
++++ b/packages/table/src/tableBody.tsx
+@@ -95,6 +95,7 @@ export class TableBody extends React.Component<ITableBodyProps, {}> {
+                 >
+                     <TableBodyCells
+                         cellRenderer={this.props.cellRenderer}
++                        focusedCell={this.props.focusedCell}
+                         grid={grid}
+                         loading={this.props.loading}
+                         onCompleteRender={this.props.onCompleteRender}
+
+
+diff --git a/packages/table/src/tableBodyCells.tsx b/packages/table/src/tableBodyCells.tsx
+index aee3a081b0..62f2580959 100644
+--- a/packages/table/src/tableBodyCells.tsx
++++ b/packages/table/src/tableBodyCells.tsx
+@@ -11,6 +11,7 @@ import * as React from ""react"";
+ 
+ import { emptyCellRenderer, ICellRenderer } from ""./cell/cell"";
+ import { Batcher } from ""./common/batcher"";
++import { IFocusedCellCoordinates } from ""./common/cell"";
+ import * as Classes from ""./common/classes"";
+ import { Grid, IColumnIndices, IRowIndices } from ""./common/grid"";
+ import { Rect } from ""./common/rect"";
+@@ -23,6 +24,11 @@ export interface ITableBodyCellsProps extends IRowIndices, IColumnIndices, IProp
+      */
+     cellRenderer: ICellRenderer;
+ 
++    /**
++     * The coordinates of the currently focused cell, for setting the ""isFocused"" prop on cells.
++     */
++    focusedCell?: IFocusedCellCoordinates;
++
+     /**
+      * The grid computes sizes of cells, rows, or columns from the
+      * configurable `columnWidths` and `rowHeights`.
+@@ -170,7 +176,7 @@ export class TableBodyCells extends React.Component<ITableBodyCellsProps, {}> {
+     };
+ 
+     private renderCell = (rowIndex: number, columnIndex: number, extremaClasses: string[], isGhost: boolean) => {
+-        const { cellRenderer, loading, grid } = this.props;
++        const { cellRenderer, focusedCell, loading, grid } = this.props;
+         const baseCell = isGhost ? emptyCellRenderer() : cellRenderer(rowIndex, columnIndex);
+         const className = classNames(
+             cellClassNames(rowIndex, columnIndex),
+@@ -187,7 +193,8 @@ export class TableBodyCells extends React.Component<ITableBodyCellsProps, {}> {
+         const cellLoading = baseCell.props.loading != null ? baseCell.props.loading : loading;
+ 
+         const style = { ...baseCell.props.style, ...Rect.style(rect) };
+-        return React.cloneElement(baseCell, { className, key, loading: cellLoading, style });
++        const isFocused = focusedCell != null && focusedCell.row === rowIndex && focusedCell.col === columnIndex;
++        return React.cloneElement(baseCell, { className, key, isFocused, loading: cellLoading, style });
+     };
+ 
+     // Callbacks
+",,"#### Changes proposed in this pull request:
+Editable cells can be edited when focused by pressing `f2` -- so one can edit editable tables merely with `f2`, `enter`, and the arrow keys -- no mouse required!
+
+This is done by making cells able to be browser-focused, and having them focus themselves whenever, well, they become focused. This also lets the focus stay on the table when you're done editing a cell. 
+
+#### Reviewers should focus on:
+
+There's... a bit of a horrible hack to allow the hotkeys to... pass through to the div beneath. I'm not sure if we should keep this or if there's a better way, or what? We could make some sort of slightly better version of cells having these endpoints, and make it less of a hack, maybe? Or fix hotkeys to find the DOM element underneath using `ReactDOM.findDOMNode`?
+
+This doesn't work as well with the cell render batching if you're far down and to the right enough -- you can press f2 before the rendering is caught up and be editing the wrong cell for a short period of time before the rendering catches up and snaps it away. I'm... not sure what to do about this. 
+
+#### Screenshot
+
+![oct-17-2017 17-31-51](https://user-images.githubusercontent.com/2463526/31690576-1afa44ee-b361-11e7-8b81-8e5a42362c9b.gif)
+",
+https://github.com/palantir/blueprint/pull/1023,,3f3a02dd17541cc426cca0119591fe25081db985,255476326a42ff95b6d8e1d4403c4155a91dd947,2017-04-20T23:26:48Z,"diff --git a/gulp/util/karma-config.js b/gulp/util/karma-config.js
+index 43ff7f2cc0b..7516b1a2c70 100644
+--- a/gulp/util/karma-config.js
++++ b/gulp/util/karma-config.js
+@@ -40,8 +40,8 @@ module.exports = function createConfig(project) {
+         coverageReporter: {
+             check: {
+                 each: {
+-                    lines: 79,
+-                    statements: 79,
++                    lines: 80,
++                    statements: 80,
+                 },
+             },
+             includeAllSources: true,
+@@ -54,8 +54,8 @@ module.exports = function createConfig(project) {
+                 { type: ""text"" },
+             ],
+             watermarks: {
+-                lines: [79, 90],
+-                statements: [79, 90],
++                lines: [80, 90],
++                statements: [80, 90],
+             },
+         },
+         files: filesToInclude,
+
+
+diff --git a/packages/table/src/table.tsx b/packages/table/src/table.tsx
+index e66dbe3b81c..e044eee8d09 100644
+--- a/packages/table/src/table.tsx
++++ b/packages/table/src/table.tsx
+@@ -1156,6 +1156,12 @@ export class Table extends AbstractComponent<ITableProps, ITableState> {
+         e.stopPropagation();
+ 
+         const { focusedCell } = this.state;
++        if (focusedCell == null) {
++            // halt early if we have a selectedRegionTransform or something else in play that nixes
++            // the focused cell.
++            return;
++        }
++
+         const newFocusedCell = { col: focusedCell.col, row: focusedCell.row };
+         const { grid } = this;
+ 
+@@ -1185,6 +1191,81 @@ export class Table extends AbstractComponent<ITableProps, ITableState> {
+         const newSelectionRegions = [Regions.cell(newFocusedCell.row, newFocusedCell.col)];
+         this.handleSelection(newSelectionRegions);
+         this.handleFocus(newFocusedCell);
++
++        // keep the focused cell in view
++        this.scrollBodyToFocusedCell(newFocusedCell);
++    }
++
++    private scrollBodyToFocusedCell = (focusedCell: IFocusedCellCoordinates) => {
++        const { row, col } = focusedCell;
++        const { viewportRect } = this.state;
++
++        // sort keys in normal CSS position order (per the trusty TRBL/""trouble"" acronym)
++        // tslint:disable:object-literal-sort-keys
++        const viewportBounds = {
++            top: viewportRect.top,
++            right: viewportRect.left + viewportRect.width,
++            bottom: viewportRect.top + viewportRect.height,
++            left: viewportRect.left,
++        };
++        const focusedCellBounds = {
++            top: this.grid.getCumulativeHeightBefore(row),
++            right: this.grid.getCumulativeWidthAt(col),
++            bottom: this.grid.getCumulativeHeightAt(row),
++            left: this.grid.getCumulativeWidthBefore(col),
++        };
++        // tslint:enable:object-literal-sort-keys
++
++        const focusedCellWidth = focusedCellBounds.right - focusedCellBounds.left;
++        const focusedCellHeight = focusedCellBounds.bottom - focusedCellBounds.top;
++
++        const isFocusedCellWiderThanViewport = focusedCellWidth > viewportRect.width;
++        const isFocusedCellTallerThanViewport = focusedCellHeight > viewportRect.height;
++
++        let nextScrollTop = viewportRect.top;
++        let nextScrollLeft = viewportRect.left;
++
++        // keep the top end of an overly tall focused cell in view when moving left and right
++        // (without this OR check, the body seesaws to fit the top end, then the bottom end, etc.)
++        if (focusedCellBounds.top < viewportBounds.top || isFocusedCellTallerThanViewport) {
++            // scroll up (minus one pixel to avoid clipping the focused-cell border)
++            nextScrollTop = Math.max(0, focusedCellBounds.top - 1);
++        } else if (focusedCellBounds.bottom > viewportBounds.bottom) {
++            // scroll down
++            const scrollDelta = focusedCellBounds.bottom - viewportBounds.bottom;
++            nextScrollTop = viewportBounds.top + scrollDelta;
++        }
++
++        // keep the left end of an overly wide focused cell in view when moving up and down
++        if (focusedCellBounds.left < viewportBounds.left || isFocusedCellWiderThanViewport) {
++            // scroll left (again minus one additional pixel)
++            nextScrollLeft = Math.max(0, focusedCellBounds.left - 1);
++        } else if (focusedCellBounds.right > viewportBounds.right) {
++            // scroll right
++            const scrollDelta = focusedCellBounds.right - viewportBounds.right;
++            nextScrollLeft = viewportBounds.left + scrollDelta;
++        }
++
++        const didScrollTopChange = nextScrollTop !== viewportRect.top;
++        const didScrollLeftChange = nextScrollLeft !== viewportRect.left;
++
++        if (didScrollTopChange || didScrollLeftChange) {
++            // we need to modify the body element explicitly for the viewport to shift
++            if (didScrollTopChange) {
++                this.bodyElement.scrollTop = nextScrollTop;
++            }
++            if (didScrollLeftChange) {
++                this.bodyElement.scrollLeft = nextScrollLeft;
++            }
++
++            const nextViewportRect = new Rect(
++                nextScrollLeft,
++                nextScrollTop,
++                viewportRect.width,
++                viewportRect.height,
++            );
++            this.setState({ viewportRect: nextViewportRect });
++        }
+     }
+ 
+     private handleFocus = (focusedCell: IFocusedCellCoordinates) => {
+","diff --git a/packages/table/test/tableTests.tsx b/packages/table/test/tableTests.tsx
+index c0be6d7ff7d..9c1e4e88926 100644
+--- a/packages/table/test/tableTests.tsx
++++ b/packages/table/test/tableTests.tsx
+@@ -6,10 +6,14 @@
+  */
+ 
+ import { expect } from ""chai"";
++import { mount, ReactWrapper } from ""enzyme"";
+ import * as React from ""react"";
+ 
++import { Keys } from ""@blueprintjs/core"";
+ import { Cell, Column, ITableProps, Table, TableLoadingOption } from ""../src"";
++import { IFocusedCellCoordinates } from ""../src/common/cell"";
+ import * as Classes from ""../src/common/classes"";
++import { Rect } from ""../src/common/rect"";
+ import { Regions } from ""../src/regions"";
+ import { CellType, expectCellLoading } from ""./cellTestUtils"";
+ import { ElementHarness, ReactHarness } from ""./harness"";
+@@ -383,6 +387,148 @@ describe(""<Table>"", () => {
+         }
+     });
+ 
++    describe(""Focused cell"", () => {
++        let onFocus: Sinon.SinonSpy;
++
++        const NUM_ROWS = 3;
++        const NUM_COLS = 3;
++
++        // center the initial focus cell
++        const DEFAULT_FOCUSED_CELL_COORDS = { row: 1, col: 1 } as IFocusedCellCoordinates;
++
++        // Enzyme appears to render our Table at 60px high x 400px wide. make all rows and columns
++        // the same size as the table to force scrolling no matter which direction we move the focus
++        // cell.
++        const ROW_HEIGHT = 60;
++        const COL_WIDTH = 400;
++
++        // make these values arbitrarily bigger than the table bounds
++        const OVERSIZED_ROW_HEIGHT = 10000;
++        const OVERSIZED_COL_WIDTH = 10000;
++
++        beforeEach(() => {
++            onFocus = sinon.spy();
++        });
++
++        describe(""moves a focus cell with arrow keys"", () => {
++            runFocusCellMoveTest(""up"", Keys.ARROW_UP, { row: 0, col: 1 });
++            runFocusCellMoveTest(""down"", Keys.ARROW_DOWN, { row: 2, col: 1 });
++            runFocusCellMoveTest(""left"", Keys.ARROW_LEFT, { row: 1, col: 0 });
++            runFocusCellMoveTest(""right"", Keys.ARROW_RIGHT, { row: 1, col: 2 });
++
++            it(""doesn't move a focus cell if modifier key is pressed"", () => {
++                const { component } = mountTable();
++                component.simulate(""keyDown"", createKeyEventConfig(component, ""right"", Keys.ARROW_RIGHT, true));
++                expect(onFocus.called).to.be.false;
++            });
++
++            function runFocusCellMoveTest(key: string, keyCode: number, expectedCoords: IFocusedCellCoordinates) {
++                it(key, () => {
++                    const { component } = mountTable();
++                    component.simulate(""keyDown"", createKeyEventConfig(component, key, keyCode));
++                    expect(onFocus.called).to.be.true;
++                    expect(onFocus.getCall(0).args[0]).to.deep.equal(expectedCoords);
++                });
++            }
++        });
++
++        describe(""scrolls viewport to fit focused cell after moving it"", () => {
++            runFocusCellViewportScrollTest(""up"", Keys.ARROW_UP, ""top"", ROW_HEIGHT * 0);
++            runFocusCellViewportScrollTest(""down"", Keys.ARROW_DOWN, ""top"", ROW_HEIGHT * 2);
++            runFocusCellViewportScrollTest(""left"", Keys.ARROW_LEFT, ""left"", COL_WIDTH * 0);
++            runFocusCellViewportScrollTest(""right"", Keys.ARROW_RIGHT, ""left"", COL_WIDTH * 2);
++
++            it(""keeps top edge of oversized focus cell in view when moving left and right"", () => {
++                // subtract one pixel to avoid clipping the focus cell
++                const EXPECTED_TOP_OFFSET = (OVERSIZED_ROW_HEIGHT * 1) - 1;
++
++                const { component } = mountTable(OVERSIZED_ROW_HEIGHT, OVERSIZED_COL_WIDTH);
++                const keyEventConfig = createKeyEventConfig(component, ""right"", Keys.ARROW_RIGHT);
++
++                // move right twice, expecting the viewport to snap to the top of the oversize
++                // focused cell both times
++
++                component.simulate(""keyDown"", keyEventConfig);
++                expect(component.state(""viewportRect"").top).to.equal(EXPECTED_TOP_OFFSET);
++                component.simulate(""keyDown"", keyEventConfig);
++                expect(component.state(""viewportRect"").top).to.equal(EXPECTED_TOP_OFFSET);
++            });
++
++            it(""keeps left edge of oversized focus cell in view when moving up and down"", () => {
++                // subtract one pixel to avoid clipping the focus cell
++                const EXPECTED_LEFT_OFFSET = (OVERSIZED_COL_WIDTH * 1) - 1;
++
++                const { component } = mountTable(OVERSIZED_ROW_HEIGHT, OVERSIZED_COL_WIDTH);
++                const keyEventConfig = createKeyEventConfig(component, ""down"", Keys.ARROW_DOWN);
++
++                // move down twice, expecting the viewport to snap to the left of the oversize
++                // focused cell both times
++
++                component.simulate(""keyDown"", keyEventConfig);
++                expect(component.state(""viewportRect"").left).to.equal(EXPECTED_LEFT_OFFSET);
++                component.simulate(""keyDown"", keyEventConfig);
++                expect(component.state(""viewportRect"").left).to.equal(EXPECTED_LEFT_OFFSET);
++            });
++
++            function runFocusCellViewportScrollTest(key: string,
++                                                    keyCode: number,
++                                                    attrToCheck: ""top"" | ""left"",
++                                                    expectedOffset: number) {
++                it(key, () => {
++                    const { component } = mountTable();
++                    component.simulate(""keyDown"", createKeyEventConfig(component, key, keyCode));
++                    expect(component.state(""viewportRect"")[attrToCheck]).to.equal(expectedOffset);
++                });
++            }
++        });
++
++        function mountTable(rowHeight = ROW_HEIGHT, colWidth = COL_WIDTH) {
++            const attachTo = document.createElement(""div"");
++            // need to `.fill` with some explicit value so that mapping will work, apparently
++            const columns = Array(NUM_COLS).fill(undefined).map((_, i) => <Column key={i} renderCell={renderCell}/>);
++            const component = mount(
++                <Table
++                    columnWidths={Array(NUM_ROWS).fill(colWidth)}
++                    enableFocus={true}
++                    focusedCell={DEFAULT_FOCUSED_CELL_COORDS}
++                    onFocus={onFocus}
++                    rowHeights={Array(NUM_ROWS).fill(rowHeight)}
++                    numRows={NUM_ROWS}
++                >
++                    {columns}
++                </Table>
++            , { attachTo });
++
++            // center the viewport on the focused cell
++            const viewportLeft = DEFAULT_FOCUSED_CELL_COORDS.col * COL_WIDTH;
++            const viewportTop = DEFAULT_FOCUSED_CELL_COORDS.row * ROW_HEIGHT;
++            const viewportWidth = COL_WIDTH;
++            const viewportHeight = ROW_HEIGHT;
++            component.setState({ viewportRect: new Rect(viewportLeft, viewportTop, viewportWidth, viewportHeight) });
++
++            return { attachTo, component };
++        }
++
++        function createKeyEventConfig(component: ReactWrapper<any, any>,
++                                      key: string,
++                                      keyCode: number,
++                                      shiftKey = false) {
++            const eventConfig = {
++                key,
++                keyCode,
++                shiftKey,
++                preventDefault: () => { /* Empty */ },
++                stopPropagation: () => { /* Empty */ },
++                target: (component as any).getNode(), // `getNode` is a real Enzyme method, just not in the typings?
++                which: keyCode,
++            };
++            return {
++                eventConfig,
++                nativeEvent: eventConfig,
++            };
++        }
++    });
++
+     xit(""Accepts a sparse array of column widths"", () => {
+         const table = harness.mount(
+             <Table columnWidths={[null, 200, null]} defaultColumnWidth={75}>
+","#### Fixes #915 
+
+#### Checklist
+
+- [x] Include tests
+- [x] Update documentation
+
+#### Changes proposed in this pull request:
+
+- Auto-scroll the table body when you move the focused cell around with arrow keys.
+- Fix existing errors that were being thrown when arrow-navigating when `enableFocus={false}`.
+- Add unit tests for existing focus-cell arrow navigation behavior.
+- Add unit tests for new auto-scroll behavior.
+- ???? Bumped the coverage threshold back up to `80%`.
+
+#### Reviewers should focus on:
+
+- When moving the focused cell `left` or `up`, its border would get clipped slightly if you were to auto-scroll to its top/left edge. Subtracting `1px` solves the issue.
+- Added special logic to handle the following edge case that popped up earlier on:
+    1. Say you have a focused cell wider than the viewport.
+    1. Now keyboard-navigate `up` and `down` a bunch.
+    1. Observe that the viewport see-saws between aligning to the left edge of the focused cell, then the right edge, then the left edge, then the right edge, and so on.
+    - **Instead of the above:** the special casing simply favors aligning to the _left_ edge??of oversized cells always. And in the other dimension, we favor aligning to the _top_ edge when going left and right with an overly tall focused cell.  
+- Are there any other weird edge cases you can find?
+
+#### Screenshot
+
+Basic behavior:
+![2017-04-20 16 18 02](https://cloud.githubusercontent.com/assets/443450/25256458/b49e023e-25e5-11e7-80a1-00f61626e081.gif)
+
+Handling overly wide cells:
+![2017-04-20 16 18 37](https://cloud.githubusercontent.com/assets/443450/25256462/c100bd32-25e5-11e7-80c1-21a4d1ef473f.gif)
+
+Handling overly tall cells:
+![2017-04-20 16 22 53](https://cloud.githubusercontent.com/assets/443450/25256463/c553689e-25e5-11e7-8ee2-824a5787f0c8.gif)
+
+Handling cells that are both overly wide and overly tall:
+![2017-04-20 16 24 47](https://cloud.githubusercontent.com/assets/443450/25256489/f7715d0e-25e5-11e7-8360-8cbdac08bf89.gif)",
+https://github.com/palantir/blueprint/pull/459,https://github.com/palantir/blueprint/issues/430,877f8d156a4a11c34d8fd759d22afab735f3f8b1,6a410c5129dee74ab4567d5caf1a7c305e9f61e3,2017-01-11T22:45:07Z,"diff --git a/packages/core/src/components/button/abstractButton.tsx b/packages/core/src/components/button/abstractButton.tsx
+new file mode 100644
+index 0000000000..65cb256aff
+--- /dev/null
++++ b/packages/core/src/components/button/abstractButton.tsx
+@@ -0,0 +1,61 @@
++import * as React from ""react"";
++
++import * as Keys from ""../../common/keys"";
++import { IActionProps } from ""../../common/props"";
++import { safeInvoke } from ""../../common/utils"";
++
++export interface IButtonProps extends IActionProps {
++    /** A ref handler that receives the native HTML element backing this component. */
++    elementRef?: (ref: HTMLElement) => any;
++
++    /** Name of icon (the part after `pt-icon-`) to add to button. */
++    rightIconName?: string;
++
++    /**
++     * If set to true, the button will display a centered loading spinner instead of its contents.
++     * The width of the button is not affected by the value of this prop.
++     * @default false
++     */
++    loading?: boolean;
++}
++
++export interface IButtonState {
++    isActive: boolean;
++}
++
++export abstract class AbstractButton<T> extends React.Component<React.HTMLProps<T> & IButtonProps, IButtonState> {
++    public state = {
++        isActive: false,
++    };
++
++    protected buttonRef: HTMLElement;
++    protected refHandlers = {
++        button: (ref: HTMLElement) => {
++            this.buttonRef = ref;
++            safeInvoke(this.props.elementRef, ref);
++        },
++    };
++
++    public abstract render(): JSX.Element;
++
++    protected onKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
++        switch (e.which) {
++            case Keys.SPACE:
++                e.preventDefault();
++                this.setState({ isActive: true });
++                break;
++            case Keys.ENTER:
++                this.buttonRef.click();
++                break;
++            default:
++                break;
++        }
++    }
++
++    protected onKeyUp = (e: React.KeyboardEvent<HTMLElement>) => {
++        if (e.which === Keys.SPACE) {
++            this.setState({ isActive: false });
++            this.buttonRef.click();
++        }
++    }
++}
+
+
+diff --git a/packages/core/src/components/button/buttons.tsx b/packages/core/src/components/button/buttons.tsx
+index ce470bd5c1..54eaa57de7 100644
+--- a/packages/core/src/components/button/buttons.tsx
++++ b/packages/core/src/components/button/buttons.tsx
+@@ -12,38 +12,26 @@ import * as classNames from ""classnames"";
+ import * as React from ""react"";
+ 
+ import * as Classes from ""../../common/classes"";
+-import { IActionProps, removeNonHTMLProps } from ""../../common/props"";
++import { removeNonHTMLProps } from ""../../common/props"";
+ import { Spinner } from ""../spinner/spinner"";
++import { AbstractButton, IButtonProps } from ""./abstractButton"";
+ 
+-export interface IButtonProps extends IActionProps {
+-    /** A ref handler that receives the native HTML element backing this component. */
+-    elementRef?: (ref: HTMLElement) => any;
+-
+-    /** Name of icon (the part after `pt-icon-`) to add to button. */
+-    rightIconName?: string;
+-
+-    /**
+-     * If set to true, the button will display a centered loading spinner instead of its contents.
+-     * The width of the button is not affected by the value of this prop.
+-     * @default false
+-     */
+-    loading?: boolean;
+-}
+-
+-export class Button extends React.Component<React.HTMLProps<HTMLButtonElement> & IButtonProps, {}> {
++export class Button extends AbstractButton<HTMLButtonElement> {
+     public static displayName = ""Blueprint.Button"";
+ 
+     public render() {
+-        const { children, elementRef, loading, onClick, rightIconName, text } = this.props;
++        const { children, loading, onClick, rightIconName, text } = this.props;
+         const disabled = isButtonDisabled(this.props);
+ 
+         return (
+             <button
+                 type=""button""
+                 {...removeNonHTMLProps(this.props)}
+-                className={getButtonClasses(this.props)}
++                className={getButtonClasses(this.props, this.state.isActive)}
+                 onClick={disabled ? undefined : onClick}
+-                ref={elementRef}
++                onKeyDown={this.onKeyDown}
++                onKeyUp={this.onKeyUp}
++                ref={this.refHandlers.button}
+             >
+                 {maybeRenderSpinner(loading)}
+                 {maybeRenderText(text)}
+@@ -56,7 +44,7 @@ export class Button extends React.Component<React.HTMLProps<HTMLButtonElement> &
+ 
+ export const ButtonFactory = React.createFactory(Button);
+ 
+-export class AnchorButton extends React.Component<React.HTMLProps<HTMLAnchorElement> & IButtonProps, {}> {
++export class AnchorButton extends AbstractButton<HTMLButtonElement> {
+     public static displayName = ""Blueprint.AnchorButton"";
+ 
+     public render() {
+@@ -67,10 +55,12 @@ export class AnchorButton extends React.Component<React.HTMLProps<HTMLAnchorElem
+             <a
+                 role=""button""
+                 {...removeNonHTMLProps(this.props)}
+-                className={getButtonClasses(this.props)}
++                className={getButtonClasses(this.props, this.state.isActive)}
+                 href={disabled ? undefined : href}
+                 onClick={disabled ? undefined : onClick}
+-                ref={this.props.elementRef}
++                onKeyDown={this.onKeyDown}
++                onKeyUp={this.onKeyUp}
++                ref={this.refHandlers.button}
+                 tabIndex={disabled ? undefined : tabIndex}
+             >
+                 {maybeRenderSpinner(loading)}
+@@ -84,9 +74,10 @@ export class AnchorButton extends React.Component<React.HTMLProps<HTMLAnchorElem
+ 
+ export const AnchorButtonFactory = React.createFactory(AnchorButton);
+ 
+-function getButtonClasses(props: IButtonProps) {
++function getButtonClasses(props: IButtonProps, isActive = false) {
+     return classNames(
+         Classes.BUTTON, {
++            [Classes.ACTIVE]: isActive,
+             [Classes.DISABLED]: isButtonDisabled(props),
+             [Classes.LOADING]: props.loading,
+         },
+","diff --git a/packages/core/test/buttons/buttonTests.tsx b/packages/core/test/buttons/buttonTests.tsx
+index d6c1988031..a944998b71 100644
+--- a/packages/core/test/buttons/buttonTests.tsx
++++ b/packages/core/test/buttons/buttonTests.tsx
+@@ -9,6 +9,7 @@ import { assert } from ""chai"";
+ import { mount, shallow } from ""enzyme"";
+ import * as React from ""react"";
+ 
++import * as Keys from ""../../src/common/keys"";
+ import { AnchorButton, Button, Classes, IButtonProps, Spinner } from ""../../src/index"";
+ 
+ describe(""Buttons:"", () => {
+@@ -58,6 +59,19 @@ function buttonTestSuite(component: React.ComponentClass<any>, tagName: string)
+             assert.equal(onClick.callCount, 0);
+         });
+ 
++        it(""calls onClick when enter key pressed"", () => {
++            const onClick = sinon.spy();
++            button({ onClick }, true).simulate(""keydown"", { which: Keys.ENTER });
++            // wait for the whole lifecycle to run
++            setTimeout(() => assert.equal(onClick.callCount, 1), 0);
++        });
++
++        it(""calls onClick when space key released"", () => {
++            const onClick = sinon.spy();
++            button({ onClick }, true).simulate(""keyup"", { which: Keys.SPACE });
++            setTimeout(() => assert.equal(onClick.callCount, 1), 0);
++        });
++
+         it(""elementRef receives reference to HTML element"", () => {
+             const elementRef = sinon.spy();
+             // full DOM rendering here so the ref handler is invoked
+","#### Fixes #430 
+
+#### Checklist
+
+- [x] Include tests
+
+#### Changes proposed in this pull request:
+
+- Provide consistency in `SPACE` and `ENTER` keyboard Interactions between `<Button />` and `<AnchorButton />` with a base `AbstractButton`
+- Manually tested across Chrome v55.0, Firefox v50.1, Safari 10.0, IE11, Edge
+- NB. Interactions were already standardized across all browsers for `<button/>`
+
+![wiggle2](https://cloud.githubusercontent.com/assets/6375593/21904609/234862ee-d8b9-11e6-9f5e-061518122866.gif)
+
+#### Reviewers should focus on:
+
+- Any edge cases I'm missing here?
+- Leaving out splitting `buttons.tsx` into two files and moving helper functions into `AbstractButton` for another PR
+","Ideally, it would be great if `AnchorButton` behaved like `Button`/`<button>` when it has focus and the space bar or enter key is pressed. (At the least, they should trigger the `onClick` handler, even if the exact active state behavior isn't identical.) This is needed for users who do everything via the keyboard and also for accessibility reasons.
+"
